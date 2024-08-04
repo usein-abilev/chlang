@@ -1,0 +1,155 @@
+import "log", "math";
+
+// Variables
+let __bc_ = 000_1_2_3_4_5_6_7_8_9; // Identifiers can start with underscores
+let __binary___ = 0b1010_1010;
+let __hex___ = 0x0_123_456_789_Abc_DeF;
+let __octal___ = 0o7_7_7;
+let boolean_true = true;
+let boolean_false = false;
+
+// Example of Unicode Identifiers (UAX #31)
+let café_variable = 1; // Unicode characters are allowed in variable names
+let π = 3.14159; // Greek letter Pi
+let 你好 = "你好世界"; // Chinese characters for "Hello, World"
+let змінна5 = 123; // Ukrainian word for "variable" 
+
+let signed_octet: i8 = 127; // Range is -128 to 127
+let unsigned_octet: u8 = 255; // Range is 0 to 255
+let all_variables_are_snake_case: i128 = 1234567890123456789012345678901234567890;
+let signed_short: i16 = 32_767; // Range is -32,768 to 32,767
+let unsigned_short: u16 = 65_535; // Range is 0 to 65,535
+let binary_number: i32 = 0b1010_1010;
+let hex_number: i32 = 0xdead_beef;
+let octal_number: i32 = 0o77;
+let float_number: f32 = 3.14;
+let double_number: f64 = 123456789.123456789
+let scientific_notation: f32 = 1.23e-3;
+let scientific_notation2: f32 = 1.23e3;
+let scientific_notation3: f32 = 1.23e+3;
+let scientific_notation4: f32 = 1.23E3;
+let scientific_notation5: f32 = 1.23E+3;
+let scientific_notation6: f32 = 1.23E-3;
+let implicit_float_number = 3.14
+let implicit_double_number = 2.5f64
+
+
+let all_operators = 1 + (2 - 3) * 4 / 5 % 6 && 1 || 0 ^ 2 & 3 | 4 << 5 >> 6;
+let binary_op = (0b0100_1100 & 0xFF0_000) >> 0o3 | (0x1 << 0b1) ^ 0b1111_0000;
+let binary_op2 |= 0b0100_1100 & 0xFF0_000;
+let binary_op3 &= 0b0100_1100 & 0xFF0_000;
+let binary_op4 <<= 0b0100_1100 & 0xFF0_000;
+let binary_op5 >>= 0b0100_1100 & 0xFF0_000;
+let binary_op6 ^= 0b0100_1100 & 0xFF0_000;
+let binary_op7 += 0b0100_1100 & 0xFF0_000;
+let binary_op8 -= 0b0100_1100 & 0xFF0_000;
+let binary_op9 *= 0b0100_1100 & 0xFF0_000;
+let binary_op10 /= 0b0100_1100 & 0xFF0_000;
+let binary_op11 %= 0b0100_1100 & 0xFF0_000;
+
+let math_two_plus_two_mul_two_equal_six = 2 + 2 * 2; // 6
+let math_parentheses = (2 + 2) * 2; // 8
+let math_pythagorean_theorem = math.sqrt(3 * 3 + 4 * 4); // 5
+let math_division = 5 / 2; // 2
+let math_division_float = 5.0 / 2.0; // 2.5
+let math_modulo = 5 % 2; // 1
+let math_modulo_negative = -5 % 2; // -1
+let math_modulo_negative2 = 5 % -2; // 1
+
+fn test (...args) {
+    
+}
+
+// Each source file is interpreted as a sequence of Unicode characters encoded in UTF-8
+let allowed_unicode_characters: str = "Not $test Rust, trust me.\nValue";
+let multiline_string: str = "This is a multiline\" \"string
+It can contain multiple lines\u{1F600}
+And it can contain \"quotes\" and 'single quotes', but only if you escape them ofc";
+
+let one_line_escape = "Escape \\ escape";
+
+// Constants
+const PI: f32 = 3.14159;
+const STRING_CONSTANT: str = "Hello, Worlds"
+
+
+// Structs
+struct Post { 
+    title: str,
+    body: str,
+    timestamp: u64,
+    }
+    
+struct Author {
+    first_name, last_name: str, // compact syntax of defining multiple struct-variables
+    email: str,
+    created_at: u64,
+    age: u8,
+}
+fn Author.is_adult(&self) -> self.age >= 18;
+fn Author.full_name(&self) -> str {
+    return self.first_name + " " + self.last_name;
+}
+
+struct Blog {
+    author: Author,
+    title: str,
+    posts: createVectorOf(Post), // A vector of Post structs, but there's 
+}
+                
+// More functions 
+pub fn public_function_distance(x1: f32, y1: f32, x2: f32, y2: f32) -> math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+pub fn public_function_sum(a: i32, b: i32) -> i32 {
+    return a + b;
+    }
+    pub fn function_with_no_args() { // by default, functions are private
+        log.printf("Do something");
+        }
+        
+fn private_fun_print_tree() {
+    log.printf("   🌲\n  🌲🌲\n 🌲🌲🌲\n🌲🌲🌲🌲");
+}
+
+// The main function is the entry point of the program
+fn main () {
+    const blog = Blog { // stack-allocated struct
+        title: "John's Blog",
+        author: Author {
+            first_name: "John",
+            last_name: "Doe",
+            email: "john51@chl.example.com",
+            created_at: 1630000000,
+            age: 51,
+        },
+        posts: createVectorOf(Post {
+            title: "Hello, World!",
+            body: "This is my first post",
+            timestamp: 1630000000,
+        }),
+    }
+
+    // Arrays 
+    const numbers: i32[5] = [1, 2, 3, 4, 5];
+    const numbers2: i32[] = [1, 2, 3, 4, 5]; // This is also valid
+    const numbers3 = [1, 2, 3, 5]; // This is also valid
+
+    // Iterate over the posts in the blog
+    for post in blog.posts {
+        log.printf("Title: %s\nContent: %s", post.title, post.body);
+    }
+
+    // Iterate in C-style for loop
+    for i = 0; i < 5; i++ {
+        log.printf("Number: %d", numbers[i]);
+    }
+
+    if blog.author.is_adult() {
+        log.printf("Author is an adult");
+    } else if blog.created_at - blog.author.created_at < 18 * 365 * 24 * 60 * 60 {
+        log.printf("Author is not an adult, but will be in %d years", 18 - (blog.created_at - blog.author.created_at) / 365 / 24 / 60 / 60);    
+    } else {
+        log.printf("Author is not an adult");
+    }
+
+    log.printf("Hello, World!");
+}
