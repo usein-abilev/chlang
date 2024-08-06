@@ -1,0 +1,30 @@
+// Binary expression example for AST debugging.
+
+let a = (1.5);
+let asdfasd = 2 + 3 + 4
+let b: i32 = 2 + 3 ** 4; // 83
+let c = (-a + b) / 2; // 41
+
+let operator_precedence1 = -a + b; // (-a) + b;
+let operator_precedence2 = 8 / 4 / 2; // (8 / 4) / 2;
+let operator_precedence3 = 8 / (4 / 2); // 8 / (4 / 2);
+let operator_precedence4 = 8 / 4 * 2; // (8 / 4) * 2;
+let operator_precedence5 = 2 ** 3 ** 2; // 2 ** (3 ** 2) // 512
+// operator_precedence1 = operator_precedence2 = operator_precedence3; // right-associative a = (b = c)
+
+let b = 20;
+
+let one_plus_two_mul_three__7 = 1 + 2 * 3; // 7
+let one_mul_two_plus_three__5 = 1 * 2 + 3; // 5
+let one_mul_two_plus_three_paren__10 = 2 * (2 + 3); // 10
+let one_plus_two_plus_three__6 = 1 + 2 + 3; // 6
+
+let float_division__0_5 = 1.0 / 2.0; // 0.5
+let float_division__0_333333 = 1.0 / 3.0; // 0.333333
+
+/*
+let operator_precedence = 1 + 2 * 3 + 4 / 2; // 11
+let operator_precedence_paren = operator_precedence * (1 / 2 + 3 - 4 * 2); // -45 
+
+// if we divide by zero, we get an error at compile time
+// let division_by_zero = 1 / 0; // => error: division by zero

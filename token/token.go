@@ -1,12 +1,14 @@
 // The token package represents the different types of tokens that the lexer can produce
 package token
 
+import "fmt"
+
 const (
 	ILLEGAL            = iota
 	EOF                // end of file
 	EOL                // end of line
-	COMMENT            // // or /* */
 	INT_LITERAL        // 123
+	COMMENT            // // or /* */
 	FLOAT_LITERAL      // 123.45
 	STRING_LITERAL     // "hello"
 	IDENTIFIER         // variable_name
@@ -14,6 +16,7 @@ const (
 	PLUS               // +
 	MINUS              // -
 	ASTERISK           // *
+	EXPONENT           // **
 	SLASH              // /
 	PERCENT            // %
 	BANG               // !
@@ -65,15 +68,29 @@ const (
 	FALSE
 )
 
+type TokenType int
+
+type TokenPosition struct {
+	Row    int
+	Column int
+}
+
+func (p TokenPosition) String() string {
+	return fmt.Sprintf("Ln %d, Col %d", p.Row, p.Column)
+}
+
 // Token represents a token in the source code
 type Token struct {
-	Type    int
+	Pos     TokenPosition
+	Type    TokenType
 	Literal string
 }
 
-var TokenSymbolNames = map[int]string{
+// tokenSymbolNames maps token types to their string representation (for debugging purposes)
+var tokenSymbolNames = map[TokenType]string{
 	ILLEGAL:          "<illegal>",
 	EOF:              "<eof>",
+	EOL:              "<eol>",
 	COMMENT:          "<comment>",
 	INT_LITERAL:      "integer",
 	FLOAT_LITERAL:    "float",
@@ -128,7 +145,49 @@ var TokenSymbolNames = map[int]string{
 	FALSE:    "false",
 }
 
-var identTokens = map[string]int{
+// Precedence levels for operators
+const (
+	_ = iota
+	precLowest
+	precEquals      // ==
+	precLessGreater // > or <
+	precSum         // +
+	precProduct     // *
+	precPrefix      // -X or !X
+)
+
+// operatorPrecedence maps operators to their precedence (used in the parser to determine the order of operations)
+var operatorPrecedence = map[TokenType]int{
+	PLUS:           precSum,
+	MINUS:          precSum,
+	ASTERISK:       precProduct,
+	SLASH:          precProduct,
+	PERCENT:        precProduct,
+	AMPERSAND:      precProduct,
+	PIPE:           precProduct,
+	CARET:          precProduct,
+	LEFT_SHIFT:     precProduct,
+	RIGHT_SHIFT:    precProduct,
+	EXPONENT:       precProduct,
+	EQUALS:         precEquals,
+	NOT_EQUALS:     precEquals,
+	LESS:           precLessGreater,
+	LESS_EQUALS:    precLessGreater,
+	GREATER:        precLessGreater,
+	GREATER_EQUALS: precLessGreater,
+	AND:            precLessGreater,
+	OR:             precLessGreater,
+}
+
+func GetOperatorPrecedence(op TokenType) int {
+	if precedence, ok := operatorPrecedence[op]; ok {
+		return precedence
+	}
+	return 0
+}
+
+// Maps keywords to their token type (used in the lexer to determinate whether an identifier is a keyword)
+var identTokens = map[string]TokenType{
 	"let":    VAR,
 	"const":  CONST,
 	"struct": STRUCT,
@@ -141,7 +200,15 @@ var identTokens = map[string]int{
 	"false":  FALSE,
 }
 
-func LookupKeyword(literal string) int {
+func (t Token) String() string {
+	return fmt.Sprintf("Token{Type: '%s', Literal: %q, Ln %d, Col %d}", tokenSymbolNames[t.Type], t.Literal, t.Pos.Row, t.Pos.Column)
+}
+
+func TokenSymbolName(t TokenType) string {
+	return tokenSymbolNames[t]
+}
+
+func LookupKeyword(literal string) TokenType {
 	if ident, ok := identTokens[literal]; ok {
 		return ident
 	}

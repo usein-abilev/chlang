@@ -13,7 +13,7 @@ import (
 )
 
 type Scanner struct {
-	Input  string // input source code
+	input  string // input source code
 	row    int    // row number
 	column int    // column number
 
@@ -32,7 +32,7 @@ func New(input string) (*Scanner, error) {
 	}
 
 	scanner := &Scanner{
-		Input:  input,
+		input:  input,
 		offset: 0,
 		row:    1,
 		column: 1,
@@ -45,7 +45,7 @@ func New(input string) (*Scanner, error) {
 
 // Scan scans the source code and returns the next token
 func (s *Scanner) Scan() token.Token {
-	if s.offset >= len(s.Input) {
+	if s.offset >= len(s.input) {
 		return s.createEOF()
 	}
 
@@ -108,45 +108,45 @@ func (s *Scanner) Scan() token.Token {
 		if s.char == '.' || s.peek() == '.' {
 			s.next()
 			s.next()
-			return token.Token{Type: token.ELLIPSIS, Literal: "..."}
+			return s.produceToken(token.ELLIPSIS, "...")
 		}
-		return token.Token{Type: token.DOT, Literal: "."}
+		return s.produceToken(token.DOT, ".")
 	case '=':
 		s.next()
 		switch s.char {
 		case '=':
 			s.next()
-			return token.Token{Type: token.EQUALS, Literal: "=="}
+			return s.produceToken(token.EQUALS, "==")
 		default:
-			return token.Token{Type: token.ASSIGN, Literal: "="}
+			return s.produceToken(token.ASSIGN, "=")
 		}
 	case ':':
 		s.next()
-		return token.Token{Type: token.COLON, Literal: ":"}
+		return s.produceToken(token.COLON, ":")
 	case ';':
 		s.next()
-		return token.Token{Type: token.SEMICOLON, Literal: ";"}
+		return s.produceToken(token.SEMICOLON, ";")
 	case ',':
 		s.next()
-		return token.Token{Type: token.COMMA, Literal: ","}
+		return s.produceToken(token.COMMA, ",")
 	case '(':
 		s.next()
-		return token.Token{Type: token.LEFT_PAREN, Literal: "("}
+		return s.produceToken(token.LEFT_PAREN, "(")
 	case ')':
 		s.next()
-		return token.Token{Type: token.RIGHT_PAREN, Literal: ")"}
+		return s.produceToken(token.RIGHT_PAREN, ")")
 	case '{':
 		s.next()
-		return token.Token{Type: token.LEFT_BRACE, Literal: "{"}
+		return s.produceToken(token.LEFT_BRACE, "{")
 	case '}':
 		s.next()
-		return token.Token{Type: token.RIGHT_BRACE, Literal: "}"}
+		return s.produceToken(token.RIGHT_BRACE, "}")
 	case '[':
 		s.next()
-		return token.Token{Type: token.LEFT_BRACKET, Literal: "["}
+		return s.produceToken(token.LEFT_BRACKET, "[")
 	case ']':
 		s.next()
-		return token.Token{Type: token.RIGHT_BRACKET, Literal: "]"}
+		return s.produceToken(token.RIGHT_BRACKET, "]")
 
 	// Binary and logical operators
 	case '&': // &, &&, &=
@@ -154,65 +154,65 @@ func (s *Scanner) Scan() token.Token {
 		switch s.char {
 		case '&':
 			s.next()
-			return token.Token{Type: token.AND, Literal: "&&"}
+			return s.produceToken(token.AND, "&&")
 		case '=':
 			s.next()
-			return token.Token{Type: token.AMPERSAND_EQUALS, Literal: "&="}
+			return s.produceToken(token.AMPERSAND_EQUALS, "&=")
 		default:
-			return token.Token{Type: token.AMPERSAND, Literal: "&"}
+			return s.produceToken(token.AMPERSAND, "&")
 		}
 	case '|': // |, ||, |=
 		s.next()
 		switch s.char {
 		case '|':
 			s.next()
-			return token.Token{Type: token.OR, Literal: "||"}
+			return s.produceToken(token.OR, "||")
 		case '=':
 			s.next()
-			return token.Token{Type: token.PIPE_EQUALS, Literal: "|="}
+			return s.produceToken(token.PIPE_EQUALS, "|=")
 		default:
-			return token.Token{Type: token.PIPE, Literal: "|"}
+			return s.produceToken(token.PIPE, "|")
 		}
 	case '^': // ^, ^=
 		s.next()
 		switch s.char {
 		case '=':
 			s.next()
-			return token.Token{Type: token.CARET_EQUALS, Literal: "^="}
+			return s.produceToken(token.CARET_EQUALS, "^=")
 		default:
-			return token.Token{Type: token.CARET, Literal: "^"}
+			return s.produceToken(token.CARET, "^")
 		}
 	case '<': // <, <=, <<, <<=
 		s.next()
 		switch s.char {
 		case '=':
 			s.next()
-			return token.Token{Type: token.LESS_EQUALS, Literal: "<="}
+			return s.produceToken(token.LESS_EQUALS, "<=")
 		case '<':
 			s.next()
 			if s.char == '=' {
 				s.next()
-				return token.Token{Type: token.LEFT_SHIFT_EQUALS, Literal: "<<="}
+				return s.produceToken(token.LEFT_SHIFT_EQUALS, "<<=")
 			}
-			return token.Token{Type: token.LEFT_SHIFT, Literal: "<<"}
+			return s.produceToken(token.LEFT_SHIFT, "<<")
 		default:
-			return token.Token{Type: token.LESS, Literal: "<"}
+			return s.produceToken(token.LESS, "<")
 		}
 	case '>': // >, >=, >>, >>=
 		s.next()
 		switch s.char {
 		case '=':
 			s.next()
-			return token.Token{Type: token.GREATER_EQUALS, Literal: ">="}
+			return s.produceToken(token.GREATER_EQUALS, ">=")
 		case '>':
 			s.next()
 			if s.char == '=' {
 				s.next()
-				return token.Token{Type: token.RIGHT_SHIFT_EQUALS, Literal: ">>="}
+				return s.produceToken(token.RIGHT_SHIFT_EQUALS, ">>=")
 			}
-			return token.Token{Type: token.RIGHT_SHIFT, Literal: ">>"}
+			return s.produceToken(token.RIGHT_SHIFT, ">>")
 		default:
-			return token.Token{Type: token.GREATER, Literal: ">"}
+			return s.produceToken(token.GREATER, ">")
 		}
 
 	case '+':
@@ -220,49 +220,49 @@ func (s *Scanner) Scan() token.Token {
 		switch s.char {
 		case '=':
 			s.next()
-			return token.Token{Type: token.PLUS_EQUALS, Literal: "+="}
+			return s.produceToken(token.PLUS_EQUALS, "+=")
 		default:
-			return token.Token{Type: token.PLUS, Literal: "+"}
+			return s.produceToken(token.PLUS, "+")
 		}
 	case '-':
 		s.next()
 		switch s.char {
 		case '=':
 			s.next()
-			return token.Token{Type: token.MINUS_EQUALS, Literal: "-="}
+			return s.produceToken(token.MINUS_EQUALS, "-=")
 		default:
-			return token.Token{Type: token.MINUS, Literal: "-"}
+			return s.produceToken(token.MINUS, "-")
 		}
 	case '*':
 		s.next()
 		switch s.char {
 		case '=':
 			s.next()
-			return token.Token{Type: token.ASTERISK_EQUALS, Literal: "*="}
+			return s.produceToken(token.ASTERISK_EQUALS, "*=")
+		case '*':
+			s.next()
+			return s.produceToken(token.EXPONENT, "**")
 		default:
-			return token.Token{Type: token.ASTERISK, Literal: "*"}
+			return s.produceToken(token.ASTERISK, "*")
 		}
 	case '/':
 		s.next()
 		if s.char == '=' {
 			s.next()
-			return token.Token{Type: token.SLASH_EQUALS, Literal: "/="}
+			return s.produceToken(token.SLASH_EQUALS, "/=")
 		}
-		return token.Token{Type: token.SLASH, Literal: "/"}
+		return s.produceToken(token.SLASH, "/")
 	case '%':
 		s.next()
 		if s.char == '=' {
 			s.next()
-			return token.Token{Type: token.PERCENT_EQUALS, Literal: "%="}
+			return s.produceToken(token.PERCENT_EQUALS, "%=")
 		}
-		return token.Token{Type: token.PERCENT, Literal: "%"}
+		return s.produceToken(token.PERCENT, "%")
 	}
 
 	s.fatal("Unexpected character: '%c' %x", s.char, s.char)
-	return token.Token{
-		Type:    token.ILLEGAL,
-		Literal: string(s.char),
-	}
+	return s.produceToken(token.ILLEGAL, string(s.char))
 }
 
 func (s *Scanner) scanIdentifier() token.Token {
@@ -270,11 +270,8 @@ func (s *Scanner) scanIdentifier() token.Token {
 	for isIdentPart(s.char) && s.next() != endOfFile {
 	}
 
-	literal := s.Input[start:s.offset]
-	return token.Token{
-		Type:    token.LookupKeyword(literal),
-		Literal: literal,
-	}
+	literal := s.input[start:s.offset]
+	return s.produceToken(token.LookupKeyword(literal), literal)
 }
 
 func (s *Scanner) scanString() token.Token {
@@ -293,11 +290,8 @@ func (s *Scanner) scanString() token.Token {
 	}
 
 	s.next()
-	literal := s.Input[start:s.offset]
-	return token.Token{
-		Type:    token.STRING_LITERAL,
-		Literal: literal,
-	}
+	literal := s.input[start:s.offset]
+	return s.produceToken(token.STRING_LITERAL, literal)
 }
 
 func (s *Scanner) scanNumber() token.Token {
@@ -322,11 +316,8 @@ func (s *Scanner) scanNumber() token.Token {
 		}
 
 		if letter {
-			literal := strings.ReplaceAll(s.Input[start:s.offset], "_", "")
-			return token.Token{
-				Type:    token.INT_LITERAL,
-				Literal: literal,
-			}
+			literal := strings.ReplaceAll(s.input[start:s.offset], "_", "")
+			return s.produceToken(token.INT_LITERAL, literal)
 		}
 	}
 
@@ -366,17 +357,18 @@ func (s *Scanner) scanNumber() token.Token {
 		return unicode.IsDigit(rune(ch))
 	})
 
-	literal := strings.ReplaceAll(s.Input[start:s.offset], "_", "")
-	if dot {
-		return token.Token{
-			Type:    token.FLOAT_LITERAL,
-			Literal: literal,
-		}
+	literal := strings.ReplaceAll(s.input[start:s.offset], "_", "")
+	if dot || exp {
+		// If the number contains a dot or an exponent, it is a float number
+		return s.produceToken(
+			token.FLOAT_LITERAL,
+			literal,
+		)
 	}
-	return token.Token{
-		Type:    token.INT_LITERAL,
-		Literal: literal,
-	}
+	return s.produceToken(
+		token.INT_LITERAL,
+		literal,
+	)
 }
 
 func (s *Scanner) scanNumberByCond(cond func(rune) bool) string {
@@ -386,16 +378,16 @@ func (s *Scanner) scanNumberByCond(cond func(rune) bool) string {
 		}
 	}
 
-	return s.Input[s.offset:s.offset]
+	return s.input[s.offset:s.offset]
 }
 
 func (s *Scanner) next() rune {
 	s.offset += s.charSize
-	if s.offset >= len(s.Input) {
+	if s.offset >= len(s.input) {
 		return endOfFile
 	}
 
-	char, size := utf8.DecodeRuneInString(s.Input[s.offset:])
+	char, size := utf8.DecodeRuneInString(s.input[s.offset:])
 	s.charSize = size
 	s.column++
 	s.char = char
@@ -414,21 +406,29 @@ func (s *Scanner) next() rune {
 }
 
 func (s *Scanner) peek() rune {
-	char, _ := utf8.DecodeRuneInString(s.Input[s.offset+s.charSize:])
+	char, _ := utf8.DecodeRuneInString(s.input[s.offset+s.charSize:])
 	return char
 }
 
 func (s *Scanner) createEOF() token.Token {
+	return s.produceToken(token.EOF, "")
+}
+
+func (s *Scanner) produceToken(t token.TokenType, literal string) token.Token {
 	return token.Token{
-		Type:    token.EOF,
-		Literal: "",
+		Type:    t,
+		Literal: literal,
+		Pos: token.TokenPosition{
+			Row:    s.row,
+			Column: s.column,
+		},
 	}
 }
 
 func (s *Scanner) fatal(msg string, args ...interface{}) {
 	minBound := int64(math.Max(float64(s.row-1), 0))
-	maxBound := int64(math.Min(float64(s.row+1), float64(len(strings.Split(s.Input, "\n")))))
-	lines := strings.Join(strings.Split(s.Input, "\n")[minBound:maxBound], "\n")
+	maxBound := int64(math.Min(float64(s.row+1), float64(len(strings.Split(s.input, "\n")))))
+	lines := strings.Join(strings.Split(s.input, "\n")[minBound:maxBound], "\n")
 
 	log.Printf("\033[31mFailed line: (pos:%d)\n===============================\n%s\n===============================\033[0m", s.offset, lines)
 	log.Fatalf(fmt.Sprintf("\033[31m[Scanner error]: %s at L%d:%d\n\033[0m", msg, s.row, s.column), args...)
