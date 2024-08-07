@@ -50,18 +50,18 @@ func (s *Scanner) Scan() token.Token {
 	}
 
 	// skip whitespace: spaces, tabs, etc
-	eol := false
+	// eol := false
 	for isWhitespace(s.char) {
-		if s.char == '\n' {
-			eol = true
-		}
+		// if s.char == '\n' {
+		// 	// eol = true
+		// }
 		if s.next() == endOfFile {
 			return s.createEOF()
 		}
 	}
-	if eol {
-		return token.Token{Type: token.EOL, Literal: "\n"}
-	}
+	// if eol {
+	// 	return token.Token{Type: token.EOL, Literal: "\n"}
+	// }
 
 	// skip comments
 	if s.char == '/' && (s.peek() == '/' || s.peek() == '*') {
@@ -157,7 +157,7 @@ func (s *Scanner) Scan() token.Token {
 			return s.produceToken(token.AND, "&&")
 		case '=':
 			s.next()
-			return s.produceToken(token.AMPERSAND_EQUALS, "&=")
+			return s.produceToken(token.AMPERSAND_ASSIGN, "&=")
 		default:
 			return s.produceToken(token.AMPERSAND, "&")
 		}
@@ -169,7 +169,7 @@ func (s *Scanner) Scan() token.Token {
 			return s.produceToken(token.OR, "||")
 		case '=':
 			s.next()
-			return s.produceToken(token.PIPE_EQUALS, "|=")
+			return s.produceToken(token.PIPE_ASSIGN, "|=")
 		default:
 			return s.produceToken(token.PIPE, "|")
 		}
@@ -178,7 +178,7 @@ func (s *Scanner) Scan() token.Token {
 		switch s.char {
 		case '=':
 			s.next()
-			return s.produceToken(token.CARET_EQUALS, "^=")
+			return s.produceToken(token.CARET_ASSIGN, "^=")
 		default:
 			return s.produceToken(token.CARET, "^")
 		}
@@ -192,7 +192,7 @@ func (s *Scanner) Scan() token.Token {
 			s.next()
 			if s.char == '=' {
 				s.next()
-				return s.produceToken(token.LEFT_SHIFT_EQUALS, "<<=")
+				return s.produceToken(token.LEFT_SHIFT_ASSIGN, "<<=")
 			}
 			return s.produceToken(token.LEFT_SHIFT, "<<")
 		default:
@@ -208,7 +208,7 @@ func (s *Scanner) Scan() token.Token {
 			s.next()
 			if s.char == '=' {
 				s.next()
-				return s.produceToken(token.RIGHT_SHIFT_EQUALS, ">>=")
+				return s.produceToken(token.RIGHT_SHIFT_ASSIGN, ">>=")
 			}
 			return s.produceToken(token.RIGHT_SHIFT, ">>")
 		default:
@@ -220,7 +220,7 @@ func (s *Scanner) Scan() token.Token {
 		switch s.char {
 		case '=':
 			s.next()
-			return s.produceToken(token.PLUS_EQUALS, "+=")
+			return s.produceToken(token.PLUS_ASSIGN, "+=")
 		default:
 			return s.produceToken(token.PLUS, "+")
 		}
@@ -229,7 +229,10 @@ func (s *Scanner) Scan() token.Token {
 		switch s.char {
 		case '=':
 			s.next()
-			return s.produceToken(token.MINUS_EQUALS, "-=")
+			return s.produceToken(token.MINUS_ASSIGN, "-=")
+		case '>':
+			s.next()
+			return s.produceToken(token.ARROW, "->")
 		default:
 			return s.produceToken(token.MINUS, "-")
 		}
@@ -238,9 +241,13 @@ func (s *Scanner) Scan() token.Token {
 		switch s.char {
 		case '=':
 			s.next()
-			return s.produceToken(token.ASTERISK_EQUALS, "*=")
+			return s.produceToken(token.ASTERISK_ASSIGN, "*=")
 		case '*':
 			s.next()
+			if s.char == '=' {
+				s.next()
+				return s.produceToken(token.EXPONENT_ASSIGN, "**=")
+			}
 			return s.produceToken(token.EXPONENT, "**")
 		default:
 			return s.produceToken(token.ASTERISK, "*")
@@ -249,14 +256,14 @@ func (s *Scanner) Scan() token.Token {
 		s.next()
 		if s.char == '=' {
 			s.next()
-			return s.produceToken(token.SLASH_EQUALS, "/=")
+			return s.produceToken(token.SLASH_ASSIGN, "/=")
 		}
 		return s.produceToken(token.SLASH, "/")
 	case '%':
 		s.next()
 		if s.char == '=' {
 			s.next()
-			return s.produceToken(token.PERCENT_EQUALS, "%=")
+			return s.produceToken(token.PERCENT_ASSIGN, "%=")
 		}
 		return s.produceToken(token.PERCENT, "%")
 	}

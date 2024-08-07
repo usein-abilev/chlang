@@ -1,4 +1,17 @@
 // AST Builder implementation
+// TODO: Implement:
+// * [ ] Constant declaration
+// * [ ] Function declaration
+// * [ ] Function calls
+// * [ ] Function arguments spread operator
+// * [ ] If-else statements
+// * [ ] For loops
+// * [ ] Range types
+// * [ ] Match/When statements
+// * [ ] Structs
+// * [ ] Struct methods
+// * [ ] Enums
+// * [ ]  Arrays
 package parser
 
 import (
@@ -15,26 +28,19 @@ type span struct {
 type (
 	Statement interface {
 		Node()
+		PrintTree(level int)
 	}
 	Expression interface {
 		Node()
+		PrintTree(level int)
 	}
-	UnaryExp struct {
-		Span  span
-		Op    *tokenpkg.Token
-		Right Expression
-	}
-	BinaryExp struct {
-		Span  span
-		Left  Expression
-		Op    *tokenpkg.Token
-		Right Expression
-	}
+
 	Identifier struct {
 		Span  span
 		Token *tokenpkg.Token
 		Value string
 	}
+
 	IntLiteral struct {
 		Span  span
 		Value string
@@ -42,6 +48,55 @@ type (
 	FloatLiteral struct {
 		Span  span
 		Value string
+	}
+
+	UnaryExp struct {
+		Span  span
+		Op    *tokenpkg.Token
+		Right Expression
+	}
+	BinaryExp struct {
+		Span  span
+		Op    *tokenpkg.Token
+		Left  Expression
+		Right Expression
+	}
+	AssignExp struct {
+		Span  span
+		Op    *tokenpkg.Token
+		Left  Expression
+		Right Expression
+	}
+	IfExpression struct {
+		Span      span
+		Condition Expression
+		ThenBlock *BlockStatement
+		ElseBlock []*BlockStatement
+	}
+	ExpressionStatement struct {
+		Span span
+		Expr Expression
+	}
+	// Function declaration statement
+	FuncDeclarationStatement struct {
+		Span       span
+		FunToken   *tokenpkg.Token
+		Name       *Identifier
+		Params     []*FuncArgument
+		Body       *BlockStatement
+		ReturnType *Identifier
+	}
+	FuncArgument struct {
+		Name *Identifier
+		Type *Identifier
+	}
+	BlockStatement struct {
+		Span       span
+		Statements []Statement
+	}
+	ReturnStatement struct {
+		Span       span
+		Expression Expression
 	}
 	// Variable declaration statement such as `let a = 1`
 	VarDeclarationStatement struct {
@@ -53,12 +108,18 @@ type (
 	}
 )
 
-func (Identifier) Node()              {}
-func (IntLiteral) Node()              {}
-func (FloatLiteral) Node()            {}
-func (UnaryExp) Node()                {}
-func (BinaryExp) Node()               {}
-func (VarDeclarationStatement) Node() {}
+func (Identifier) Node()               {}
+func (IntLiteral) Node()               {}
+func (FloatLiteral) Node()             {}
+func (UnaryExp) Node()                 {}
+func (BinaryExp) Node()                {}
+func (AssignExp) Node()                {}
+func (BlockStatement) Node()           {}
+func (IfExpression) Node()             {}
+func (ExpressionStatement) Node()      {}
+func (ReturnStatement) Node()          {}
+func (VarDeclarationStatement) Node()  {}
+func (FuncDeclarationStatement) Node() {}
 
 // Program is the root node of the AST
 type Program struct {
@@ -96,9 +157,16 @@ func (p *Parser) Parse() *Program {
 		} else if p.current.Type == tokenpkg.EOL {
 			p.next()
 			continue
+		} else if p.current.Type == tokenpkg.SEMICOLON {
+			// skip semicolons because they are optional
+			p.next()
+			continue
 		}
+
 		statement := p.parseStatement()
-		program.Statements = append(program.Statements, statement)
+		if statement != nil {
+			program.Statements = append(program.Statements, statement)
+		}
 	}
 
 	for _, statement := range program.Statements {
@@ -117,12 +185,131 @@ func (p *Parser) Parse() *Program {
 
 func (p *Parser) parseStatement() Statement {
 	switch p.current.Type {
+	case tokenpkg.SEMICOLON:
+		p.consume(tokenpkg.SEMICOLON)
+		return nil
 	case tokenpkg.VAR:
 		return p.parseVarStatement()
+	case tokenpkg.IF:
+		return &ExpressionStatement{Expr: p.parseIfExpression()}
+	case tokenpkg.FOR:
+		log.Fatalf("For loop is not implemented yet")
+	case tokenpkg.RETURN:
+		p.consume(tokenpkg.RETURN)
+		if p.current.Type == tokenpkg.SEMICOLON || p.current.Type == tokenpkg.RIGHT_BRACE {
+			p.next()
+			log.Printf("Return return nothing %s", p.current.Literal)
+			return &ReturnStatement{}
+		}
+		expr := p.parseExpression()
+		if p.current.Type == tokenpkg.SEMICOLON {
+			p.consume(p.current.Type)
+		}
+		return &ReturnStatement{Expression: expr}
+	case tokenpkg.FUNCTION:
+		return p.parseFunStatement()
+	case tokenpkg.IDENTIFIER:
+		// assignment statement or function call or expression statement
+		identifier := p.parseIdentifier()
+		var expr Expression
+		if tokenpkg.IsAssignment(p.current.Type) {
+			p.next()
+			expression := p.parseExpression()
+			if p.current.Type == tokenpkg.SEMICOLON {
+				p.consume(tokenpkg.SEMICOLON)
+			}
+			expr = AssignExp{Left: identifier, Right: expression}
+		} else if p.current.Type == tokenpkg.LEFT_PAREN {
+			// function call
+			log.Fatalf("Function call is not implemented yet")
+		} else {
+			// expression statement
+			expression := p.parseExpression()
+			if p.current.Type == tokenpkg.SEMICOLON {
+				p.consume(tokenpkg.SEMICOLON)
+			}
+			expr = expression
+		}
+
+		return &ExpressionStatement{Expr: expr}
+	case tokenpkg.LEFT_BRACE:
+		return p.parseBlockStatement()
+	case tokenpkg.INT_LITERAL, tokenpkg.FLOAT_LITERAL:
+		expression := p.parseExpression()
+		if p.current.Type == tokenpkg.SEMICOLON {
+			p.consume(tokenpkg.SEMICOLON)
+		}
+		return &ExpressionStatement{Expr: expression}
 	default:
-		log.Fatalf("Unexpected token: %s at %s", p.current, p.current.Pos)
+		log.Fatalf("Unexpected statement token: %s at %s", p.current, p.current.Pos)
 	}
 	return nil
+}
+
+func (p *Parser) parseIfExpression() *IfExpression {
+	p.consume(tokenpkg.IF)
+	condition := p.parseExpression()
+	thenBlock := p.parseBlockStatement()
+	elseBlock := make([]*BlockStatement, 0)
+
+	for p.current.Type == tokenpkg.ELSE {
+		p.consume(tokenpkg.ELSE)
+		if p.current.Type == tokenpkg.IF {
+			elseif := p.parseIfExpression()
+			elseBlock = append(elseBlock, elseif.ThenBlock)
+		} else {
+			elseBlock = append(elseBlock, p.parseBlockStatement())
+		}
+	}
+
+	return &IfExpression{
+		Condition: condition,
+		ThenBlock: thenBlock,
+		ElseBlock: elseBlock,
+	}
+}
+
+func (p *Parser) parseFunStatement() *FuncDeclarationStatement {
+	funToken := p.consume(tokenpkg.FUNCTION)
+	identifier := p.parseIdentifier()
+	p.consume(tokenpkg.LEFT_PAREN)
+	params := p.parseFnParameters()
+	p.consume(tokenpkg.RIGHT_PAREN)
+	// TODO: return type annotation (optional)
+	var returnType *Identifier
+	if p.current.Type == tokenpkg.ARROW {
+		p.consume(tokenpkg.ARROW)
+		p.expect(tokenpkg.IDENTIFIER)
+		returnType = p.parseIdentifier()
+	}
+	body := p.parseBlockStatement()
+	return &FuncDeclarationStatement{
+		FunToken:   funToken,
+		Name:       identifier,
+		Params:     params,
+		Body:       body,
+		ReturnType: returnType,
+	}
+}
+
+func (p *Parser) parseFnParameters() []*FuncArgument {
+	params := make([]*FuncArgument, 0)
+	for p.current.Type != tokenpkg.RIGHT_PAREN {
+		identifier := p.parseIdentifier()
+		p.consume(tokenpkg.COLON) // type annotation
+		p.expect(tokenpkg.IDENTIFIER)
+		idType := p.parseIdentifier()
+
+		arg := &FuncArgument{
+			Name: identifier,
+			Type: idType,
+		}
+		params = append(params, arg)
+		if p.current.Type == tokenpkg.COMMA {
+			p.consume(tokenpkg.COMMA)
+		}
+	}
+	return params
 }
 
 func (p *Parser) parseVarStatement() *VarDeclarationStatement {
@@ -151,6 +338,23 @@ func (p *Parser) parseVarStatement() *VarDeclarationStatement {
 	}
 }
 
+func (p *Parser) parseBlockStatement() *BlockStatement {
+	block := &BlockStatement{Statements: make([]Statement, 0)}
+	if p.current.Type == tokenpkg.LEFT_BRACE {
+		p.consume(tokenpkg.LEFT_BRACE)
+		for p.current.Type != tokenpkg.RIGHT_BRACE {
+			statement := p.parseStatement()
+			block.Statements = append(block.Statements, statement)
+		}
+		p.consume(tokenpkg.RIGHT_BRACE)
+	} else {
+		// single statement block
+		statement := p.parseStatement()
+		block.Statements = append(block.Statements, statement)
+	}
+	return block
+}
+
 func (p *Parser) parseIdentifier() *Identifier {
 	token := p.consume(tokenpkg.IDENTIFIER)
 	return &Identifier{Token: token, Value: token.Literal}
@@ -166,7 +370,7 @@ func (p *Parser) parseBinaryExpression(min int) Expression {
 	for p.current.Type != tokenpkg.EOF && min < tokenpkg.GetOperatorPrecedence(p.current.Type) {
 		op := p.consume(p.current.Type)
 		var precedence int = tokenpkg.GetOperatorPrecedence(op.Type)
-		if op.Type == tokenpkg.EXPONENT {
+		if tokenpkg.IsRightAssociative(op.Type) {
 			precedence -= 1
 		}
 		right := p.parseBinaryExpression(precedence)
@@ -177,6 +381,8 @@ func (p *Parser) parseBinaryExpression(min int) Expression {
 
 func (p *Parser) parsePrimary() Expression {
 	switch p.current.Type {
+	case tokenpkg.IF:
+		return p.parseIfExpression()
 	case tokenpkg.INT_LITERAL:
 		token := p.consume(tokenpkg.INT_LITERAL)
 		return &IntLiteral{Value: token.Literal}
@@ -184,6 +390,7 @@ func (p *Parser) parsePrimary() Expression {
 		token := p.consume(tokenpkg.FLOAT_LITERAL)
 		return &FloatLiteral{Value: token.Literal}
 	case tokenpkg.IDENTIFIER:
+		// TODO: identifier or function call
 		return p.parseIdentifier()
 	case tokenpkg.LEFT_PAREN:
 		p.consume(tokenpkg.LEFT_PAREN)
@@ -194,8 +401,6 @@ func (p *Parser) parsePrimary() Expression {
 		op := p.consume(p.current.Type)
 		expression := p.parsePrimary()
 		return &UnaryExp{Op: op, Right: expression}
-	default:
-		log.Fatalf("Unexpected token: %s at %s", p.current, p.current.Pos)
 	}
 	return nil
 }

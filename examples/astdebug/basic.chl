@@ -1,0 +1,139 @@
+// Basic example that covers all the basic features of the language
+// module basic;
+
+fn test_ifs (a: i32, b: i32) -> i32 {
+    let max = a + 2 + 3 * 4
+    if (a < b) max = b
+
+    // With else
+    if a > b {
+        max = a
+    } else {
+        max = b
+    }
+
+    // As expression
+    max = if (a > b) a else b
+    max = if a > b a else b 
+    
+    // Even more compact (but less readable)
+    max = if a > b if a > 0 a else 0 else b
+    // Is equivalent to
+    max = if a > b {
+        if a > 0 {
+            a
+        } else {
+            0
+        }
+    } else {
+        b
+    }
+    // or
+    if a > b { 
+        if a > 0 { 
+            max = a
+        } else { 
+            max = 0
+        }
+    } else { 
+        max = b
+    }
+    
+
+    // You can also use `else if` in expressions:
+    let maxLimit = 1
+    let maxOrLimit = if (maxLimit > a) maxLimit else if (a > b) a else b
+}
+/*
+
+// if statement vs if expression
+fn fibonacci(n: i32) -> i32 {
+    // let a = 10
+    // +
+    // 3; -5; // should be work as 10 + 3; and -5 as an expr statement;
+
+    // 1
+    // 2
+    // 3
+    // 4
+    // 5
+    // 6
+    // 7
+    let a = if n <= 1 {
+        let b = 10;
+        n
+    } else if n == 2 { 
+        1
+    } else { 
+        fibonacci(n - 1) + fibonacci(n - 2)
+    }
+
+    if n <= 1 return n
+    else if n == 2 return 1
+    else return fibonacci(n - 1) + fibonacci(n - 2);
+}
+/*
+fn test_expression() {
+    let a = 1 + 2 * 3; // 7
+    let b = (1 + 2) * 3; // 9
+    let c = 1 + 2 * 3 / 4; // 2
+    let d = 1 + 2 * 3 % 4; // 3
+    let e = 1 + 2 * 3 == 7; // true
+    let f = 1 + 2 * 3 != 7; // false
+    let g = 1 + 2 * 3 < 7; // true
+    let h = 1 + 2 * 3 <= 7; // true
+    let i = 1 + 2 * 3 > 7; // false
+    let j = 1 + 2 * 3 >= 7; // false
+    let k = 1 + 2 * 3 && 1 + 2 * 3; // true
+    let l = 1 + 2 * 3 || 1 + 2 * 3; // true
+    let m = !1 + 2 * 3; // -6
+    let n = 1 + 2 * 3; // 7
+
+    if a == 2 return
+    if a == 2 {
+        return
+    } else return 2;
+
+    if a === 1 {
+        return
+    }
+
+    let a = 10;
+
+    let ife = if 1 + 2 * 3 == 7 { 
+        2 ** 3
+    } else { 
+        3 ** 2 + 1
+    };
+
+    return if ife == true 1 else 0;
+}
+/*
+fn fibonacci_iterative(n: i32) -> i32 {
+    let a = 0
+    let b = 1;
+    for i in 0..n { // can be simplify to "for i in 0..n"
+        let temp = a;
+        a = b;
+        b = temp + b;
+    }
+    return a;
+}
+
+fn check_two_numbers (a: i32, b: i32) -> i32 {
+    if a > b { 
+        log.printf("a is greater than b");
+    } else if a < b {
+        log.printf("a is less than b");
+    } else {
+        log.printf("a is equal to b");
+    }
+}
+
+// The main function is the entry point of the program
+fn main () {
+    const a = 18;
+    const b = 1 + 2 * 3; // 7
+    const result = check_two_numbers(a, b);
+    log.printf("The result is %i", result);
+}

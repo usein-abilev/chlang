@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -74,7 +73,6 @@ func executeExp(mem *map[string]interface{}, exp parser.Expression) string {
 }
 
 func executeProgram(program *parser.Program) {
-	log.Printf("Executing program: %v", program)
 	var fakememory = make(map[string]interface{})
 	for _, statement := range program.Statements {
 		if varDecl, ok := statement.(*parser.VarDeclarationStatement); ok {
@@ -86,20 +84,13 @@ func executeProgram(program *parser.Program) {
 }
 
 func main() {
-	bytes := readFileBytes("./examples/astdebug/variables.chl")
+	bytes := readFileBytes("./examples/astdebug/basic.chl")
 	source := string(bytes)
 	lexer, err := scanner.New(source)
 	if err != nil {
 		log.Fatalf("Cannot create lexer: %s", err)
 	}
-	parser := parser.New(lexer)
-	program := parser.Parse()
-	b, err := json.Marshal(program)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	log.Printf(string(b))
-	executeProgram(program)
-	log.Printf("Program: %v", program)
+	astParser := parser.New(lexer)
+	program := astParser.Parse()
+	parser.PrintAST(program)
 }

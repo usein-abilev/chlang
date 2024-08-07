@@ -12,7 +12,6 @@ const (
 	FLOAT_LITERAL      // 123.45
 	STRING_LITERAL     // "hello"
 	IDENTIFIER         // variable_name
-	ASSIGN             // =
 	PLUS               // +
 	MINUS              // -
 	ASTERISK           // *
@@ -27,22 +26,25 @@ const (
 	CARET              // ^
 	LESS               // <
 	LEFT_SHIFT         // <<
-	LEFT_SHIFT_EQUALS  // <<=
 	GREATER            // >
 	RIGHT_SHIFT        // >>
-	RIGHT_SHIFT_EQUALS // >>=
 	EQUALS             // ==
 	NOT_EQUALS         // !=
 	LESS_EQUALS        // <=
 	GREATER_EQUALS     // >=
-	PLUS_EQUALS        // +=
-	MINUS_EQUALS       // -=
-	ASTERISK_EQUALS    // *=
-	SLASH_EQUALS       // /=
-	PERCENT_EQUALS     // %=
-	AMPERSAND_EQUALS   // &=
-	PIPE_EQUALS        // |=
-	CARET_EQUALS       // ^=
+	ASSIGN             // =
+	LEFT_SHIFT_ASSIGN  // <<=
+	RIGHT_SHIFT_ASSIGN // >>=
+	PLUS_ASSIGN        // +=
+	MINUS_ASSIGN       // -=
+	ASTERISK_ASSIGN    // *=
+	EXPONENT_ASSIGN    // **=
+	SLASH_ASSIGN       // /=
+	PERCENT_ASSIGN     // %=
+	AMPERSAND_ASSIGN   // &=
+	PIPE_ASSIGN        // |=
+	CARET_ASSIGN       // ^=
+	ARROW              // ->
 	LEFT_PAREN         // (
 	RIGHT_PAREN        // )
 	LEFT_BRACE         // {
@@ -114,14 +116,16 @@ var tokenSymbolNames = map[TokenType]string{
 	GREATER_EQUALS:   ">=",
 	EQUALS:           "==",
 	NOT_EQUALS:       "!=",
-	PLUS_EQUALS:      "+=",
-	MINUS_EQUALS:     "-=",
-	ASTERISK_EQUALS:  "*=",
-	SLASH_EQUALS:     "/=",
-	PERCENT_EQUALS:   "%=",
-	AMPERSAND_EQUALS: "&=",
-	PIPE_EQUALS:      "|=",
-	CARET_EQUALS:     "^=",
+	PLUS_ASSIGN:      "+=",
+	MINUS_ASSIGN:     "-=",
+	ASTERISK_ASSIGN:  "*=",
+	SLASH_ASSIGN:     "/=",
+	PERCENT_ASSIGN:   "%=",
+	AMPERSAND_ASSIGN: "&=",
+	EXPONENT_ASSIGN:  "**=",
+	PIPE_ASSIGN:      "|=",
+	CARET_ASSIGN:     "^=",
+	ARROW:            "->", // function return type arrow
 	LEFT_PAREN:       "(",
 	RIGHT_PAREN:      ")",
 	LEFT_BRACE:       "{",
@@ -147,36 +151,50 @@ var tokenSymbolNames = map[TokenType]string{
 
 // Precedence levels for operators
 const (
-	_ = iota
-	precLowest
-	precEquals      // ==
+	_               = iota
+	precAssign      // =, +=, -=, *=, /=, %=, &=, |=, ^=, <<=, >>=, **=
+	precBitwise     // &, |, ^
 	precLessGreater // > or <
-	precSum         // +
-	precProduct     // *
+	precSum         // +, -
+	precEquals      // ==
+	precProduct     // *, /, %
 	precPrefix      // -X or !X
+	precHighest
 )
 
 // operatorPrecedence maps operators to their precedence (used in the parser to determine the order of operations)
 var operatorPrecedence = map[TokenType]int{
-	PLUS:           precSum,
-	MINUS:          precSum,
-	ASTERISK:       precProduct,
-	SLASH:          precProduct,
-	PERCENT:        precProduct,
-	AMPERSAND:      precProduct,
-	PIPE:           precProduct,
-	CARET:          precProduct,
-	LEFT_SHIFT:     precProduct,
-	RIGHT_SHIFT:    precProduct,
-	EXPONENT:       precProduct,
-	EQUALS:         precEquals,
-	NOT_EQUALS:     precEquals,
-	LESS:           precLessGreater,
-	LESS_EQUALS:    precLessGreater,
-	GREATER:        precLessGreater,
-	GREATER_EQUALS: precLessGreater,
-	AND:            precLessGreater,
-	OR:             precLessGreater,
+	ASSIGN:             precAssign,
+	LEFT_SHIFT_ASSIGN:  precAssign,
+	RIGHT_SHIFT_ASSIGN: precAssign,
+	PLUS_ASSIGN:        precAssign,
+	MINUS_ASSIGN:       precAssign,
+	ASTERISK_ASSIGN:    precAssign,
+	EXPONENT_ASSIGN:    precAssign,
+	SLASH_ASSIGN:       precAssign,
+	PERCENT_ASSIGN:     precAssign,
+	AMPERSAND_ASSIGN:   precAssign,
+	PIPE_ASSIGN:        precAssign,
+	CARET_ASSIGN:       precAssign,
+	PLUS:               precSum,
+	MINUS:              precSum,
+	ASTERISK:           precProduct, // multiplication
+	SLASH:              precProduct, // division
+	PERCENT:            precProduct, // modulo
+	AMPERSAND:          precBitwise, // bitwise AND
+	PIPE:               precBitwise, // bitwise OR
+	CARET:              precBitwise, // bitwise XOR
+	LEFT_SHIFT:         precBitwise, // bitwise left shift
+	RIGHT_SHIFT:        precBitwise, // bitwise right shift
+	EQUALS:             precEquals,  // ==
+	NOT_EQUALS:         precEquals,  // !=
+	EXPONENT:           precHighest, // exponentiation
+	LESS:               precLessGreater,
+	LESS_EQUALS:        precLessGreater,
+	GREATER:            precLessGreater,
+	GREATER_EQUALS:     precLessGreater,
+	AND:                precLessGreater,
+	OR:                 precLessGreater,
 }
 
 func GetOperatorPrecedence(op TokenType) int {
@@ -184,6 +202,25 @@ func GetOperatorPrecedence(op TokenType) int {
 		return precedence
 	}
 	return 0
+}
+
+func IsRightAssociative(op TokenType) bool {
+	switch op {
+	case EXPONENT, EXPONENT_ASSIGN, ASSIGN, PLUS_ASSIGN, MINUS_ASSIGN, ASTERISK_ASSIGN,
+		SLASH_ASSIGN, PERCENT_ASSIGN, AMPERSAND_ASSIGN, PIPE_ASSIGN, CARET_ASSIGN,
+		LEFT_SHIFT_ASSIGN, RIGHT_SHIFT_ASSIGN:
+		return true
+	}
+	return false
+}
+
+func IsAssignment(op TokenType) bool {
+	switch op {
+	case ASSIGN, EXPONENT_ASSIGN, PLUS_ASSIGN, MINUS_ASSIGN, ASTERISK_ASSIGN, SLASH_ASSIGN,
+		PERCENT_ASSIGN, AMPERSAND_ASSIGN, PIPE_ASSIGN, CARET_ASSIGN, LEFT_SHIFT_ASSIGN, RIGHT_SHIFT_ASSIGN:
+		return true
+	}
+	return false
 }
 
 // Maps keywords to their token type (used in the lexer to determinate whether an identifier is a keyword)
