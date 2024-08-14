@@ -6,7 +6,7 @@ import "fmt"
 const (
 	ILLEGAL            = iota
 	EOF                // end of file
-	EOL                // end of line
+	NEW_LINE           // \n
 	INT_LITERAL        // 123
 	COMMENT            // // or /* */
 	FLOAT_LITERAL      // 123.45
@@ -73,8 +73,9 @@ const (
 type TokenType int
 
 type TokenPosition struct {
-	Row    int
-	Column int
+	Row      int
+	Column   int
+	Filename string
 }
 
 func (p TokenPosition) String() string {
@@ -83,16 +84,21 @@ func (p TokenPosition) String() string {
 
 // Token represents a token in the source code
 type Token struct {
-	Pos     TokenPosition
-	Type    TokenType
-	Literal string
+	Position TokenPosition
+	Type     TokenType
+	Literal  string
+}
+
+type Span struct {
+	Start TokenPosition
+	End   TokenPosition
 }
 
 // tokenSymbolNames maps token types to their string representation (for debugging purposes)
 var tokenSymbolNames = map[TokenType]string{
 	ILLEGAL:          "<illegal>",
 	EOF:              "<eof>",
-	EOL:              "<eol>",
+	NEW_LINE:         "<newline>",
 	COMMENT:          "<comment>",
 	INT_LITERAL:      "integer",
 	FLOAT_LITERAL:    "float",
@@ -201,7 +207,7 @@ func GetOperatorPrecedence(op TokenType) int {
 	if precedence, ok := operatorPrecedence[op]; ok {
 		return precedence
 	}
-	return 0
+	return -1
 }
 
 func IsRightAssociative(op TokenType) bool {
@@ -238,7 +244,7 @@ var identTokens = map[string]TokenType{
 }
 
 func (t Token) String() string {
-	return fmt.Sprintf("Token{Type: '%s', Literal: %q, Ln %d, Col %d}", tokenSymbolNames[t.Type], t.Literal, t.Pos.Row, t.Pos.Column)
+	return fmt.Sprintf("Token{Type: '%s', Literal: %q, Ln %d, Col %d}", tokenSymbolNames[t.Type], t.Literal, t.Position.Row, t.Position.Column)
 }
 
 func TokenSymbolName(t TokenType) string {

@@ -1,4 +1,4 @@
-package parser
+package ast
 
 import (
 	"fmt"
@@ -16,12 +16,22 @@ func (p Program) PrintTree(level int) {
 	}
 }
 
+func (p BadStatement) PrintTree(level int) {
+	printIndent(level)
+	fmt.Println("BadStatement: (!)")
+}
+
+func (p BadExpression) PrintTree(level int) {
+	printIndent(level)
+	fmt.Println("BadExpression: (!)")
+}
+
 func (p Identifier) PrintTree(level int) {
 	printIndent(level)
 	fmt.Printf("Identifier: %s\n", p.Value)
 }
 
-func (p AssignExp) PrintTree(level int) {
+func (p AssignExpression) PrintTree(level int) {
 	printIndent(level)
 	fmt.Printf("AssignExp:\n")
 	p.Left.PrintTree(level + 1)
@@ -42,9 +52,9 @@ func (r ReturnStatement) PrintTree(level int) {
 	}
 }
 
-func (b BinaryExp) PrintTree(level int) {
+func (b BinaryExpression) PrintTree(level int) {
 	printIndent(level)
-	fmt.Printf("BinaryExp: %s\n", b.Op.Literal)
+	fmt.Printf("BinaryExp: %s\n", b.Operator.Literal)
 	if b.Left != nil {
 		printIndent(level + 1)
 		fmt.Println("Left:")
@@ -61,19 +71,38 @@ func (ie IntLiteral) PrintTree(level int) {
 	printIndent(level)
 	fmt.Printf("IntLiteral: %s\n", ie.Value)
 }
-
+func (ie BoolLiteral) PrintTree(level int) {
+	printIndent(level)
+	fmt.Printf("BoolLiteral: %s\n", ie.Value)
+}
+func (ie StringLiteral) PrintTree(level int) {
+	printIndent(level)
+	fmt.Printf("StringLiteral: %s\n", ie.Value)
+}
 func (ie FloatLiteral) PrintTree(level int) {
 	printIndent(level)
 	fmt.Printf("IntLiteral: %s\n", ie.Value)
 }
 
-func (ie UnaryExp) PrintTree(level int) {
+func (ie UnaryExpression) PrintTree(level int) {
 	printIndent(level)
-	fmt.Printf("UnaryExp: %s\n", ie.Op.Literal)
+	fmt.Printf("UnaryExp: %s\n", ie.Operator.Literal)
 	if ie.Right != nil {
 		printIndent(level + 1)
 		fmt.Println("Expr:")
 		ie.Right.PrintTree(level + 2)
+	}
+}
+
+func (ie CallExpression) PrintTree(level int) {
+	printIndent(level)
+	fmt.Printf("CallExpression: %s\n", ie.Function.Value)
+	if len(ie.Args) > 0 {
+		printIndent(level + 1)
+		fmt.Println("Arguments:")
+		for _, arg := range ie.Args {
+			arg.PrintTree(level + 2)
+		}
 	}
 }
 
@@ -121,8 +150,8 @@ func (p VarDeclarationStatement) PrintTree(level int) {
 func (es ExpressionStatement) PrintTree(level int) {
 	printIndent(level)
 	fmt.Println("ExpressionStatement")
-	if es.Expr != nil {
-		es.Expr.PrintTree(level + 1)
+	if es.Expression != nil {
+		es.Expression.PrintTree(level + 1)
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/usein-abilev/chlang/token"
+	"github.com/usein-abilev/chlang/frontend/token"
 )
 
 type Scanner struct {
@@ -35,7 +35,7 @@ func New(input string) (*Scanner, error) {
 		input:  input,
 		offset: 0,
 		row:    1,
-		column: 1,
+		column: 0,
 	}
 
 	scanner.next()
@@ -50,18 +50,18 @@ func (s *Scanner) Scan() token.Token {
 	}
 
 	// skip whitespace: spaces, tabs, etc
-	// eol := false
+	newline := false
 	for isWhitespace(s.char) {
-		// if s.char == '\n' {
-		// 	// eol = true
-		// }
+		if s.char == '\n' {
+			newline = true
+		}
 		if s.next() == endOfFile {
 			return s.createEOF()
 		}
 	}
-	// if eol {
-	// 	return token.Token{Type: token.EOL, Literal: "\n"}
-	// }
+	if newline {
+		return s.produceToken(token.NEW_LINE, "\n")
+	}
 
 	// skip comments
 	if s.char == '/' && (s.peek() == '/' || s.peek() == '*') {
@@ -272,6 +272,14 @@ func (s *Scanner) Scan() token.Token {
 	return s.produceToken(token.ILLEGAL, string(s.char))
 }
 
+func (s *Scanner) GetLineByPosition(pos token.TokenPosition) string {
+	lines := strings.Split(s.input, "\n")
+	if pos.Row < 1 || pos.Row > len(lines) {
+		return ""
+	}
+	return lines[pos.Row-1]
+}
+
 func (s *Scanner) scanIdentifier() token.Token {
 	start := s.offset
 	for isIdentPart(s.char) && s.next() != endOfFile {
@@ -283,6 +291,7 @@ func (s *Scanner) scanIdentifier() token.Token {
 
 func (s *Scanner) scanString() token.Token {
 	start := s.offset
+	row, column := s.row, s.column
 	quote := s.char
 	s.next()
 
@@ -298,7 +307,11 @@ func (s *Scanner) scanString() token.Token {
 
 	s.next()
 	literal := s.input[start:s.offset]
-	return s.produceToken(token.STRING_LITERAL, literal)
+	return token.Token{
+		Literal:  literal,
+		Type:     token.STRING_LITERAL,
+		Position: token.TokenPosition{Row: row, Column: column},
+	}
 }
 
 func (s *Scanner) scanNumber() token.Token {
@@ -389,24 +402,24 @@ func (s *Scanner) scanNumberByCond(cond func(rune) bool) string {
 }
 
 func (s *Scanner) next() rune {
+	if s.char == '\n' {
+		s.column = 1
+		s.row++
+	}
+
 	s.offset += s.charSize
+	s.column++
 	if s.offset >= len(s.input) {
 		return endOfFile
 	}
 
 	char, size := utf8.DecodeRuneInString(s.input[s.offset:])
 	s.charSize = size
-	s.column++
 	s.char = char
 
 	if char == utf8.RuneError {
 		s.fatal("Invalid UTF-8 character")
 		return endOfFile
-	}
-
-	if s.char == '\n' {
-		s.column = 1
-		s.row++
 	}
 
 	return s.char
@@ -425,9 +438,9 @@ func (s *Scanner) produceToken(t token.TokenType, literal string) token.Token {
 	return token.Token{
 		Type:    t,
 		Literal: literal,
-		Pos: token.TokenPosition{
+		Position: token.TokenPosition{
 			Row:    s.row,
-			Column: s.column,
+			Column: s.column - len(literal),
 		},
 	}
 }
