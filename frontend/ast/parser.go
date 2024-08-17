@@ -32,7 +32,8 @@ type Parser struct {
 	index  int
 
 	// current token
-	current *chToken.Token
+	current            *chToken.Token
+	functionScopeLevel int
 }
 
 // Init creates a new AST builder/parser
@@ -78,7 +79,20 @@ func (p *Parser) parseStatement() Statement {
 		log.Fatalf("For loop is not implemented yet")
 	case chToken.RETURN:
 		p.consume(chToken.RETURN)
+		if p.functionScopeLevel == 0 {
+			p.reportError(&compilerError.SyntaxError{
+				Position:  p.current.Position,
+				ErrorLine: p.lexer.GetLineByPosition(p.current.Position),
+				Message:   "return statement outside of function",
+				Help:      "return statement can only be used inside a block statement: functions, if statements, loops etc.",
+			})
+			p.nextStatement()
+			return &BadStatement{}
+		}
 		spanStart := p.current.Position
+		if p.current.Type == chToken.SEMICOLON || p.current.Type == chToken.NEW_LINE {
+			return &ReturnStatement{Span: chToken.Span{Start: spanStart, End: p.current.Position}}
+		}
 		expr := p.parseExpression()
 		if p.current.Type == chToken.SEMICOLON {
 			p.consume(p.current.Type)
@@ -103,6 +117,7 @@ func (p *Parser) parseStatement() Statement {
 }
 
 func (p *Parser) parseIfExpression() *IfExpression {
+	startPos := p.current.Position
 	p.consume(chToken.IF)
 	condition := p.parseExpression()
 	thenBlock := p.parseBlockStatement()
@@ -121,16 +136,24 @@ func (p *Parser) parseIfExpression() *IfExpression {
 		Condition: condition,
 		ThenBlock: thenBlock,
 		ElseBlock: elseBlock,
+		Span: chToken.Span{
+			Start: startPos,
+			End:   p.current.Position,
+		},
 	}
 }
 
 func (p *Parser) parseFunStatement() *FuncDeclarationStatement {
 	funToken := p.consume(chToken.FUNCTION)
+	p.functionScopeLevel++
+	defer func() {
+		p.functionScopeLevel--
+	}()
 	identifier := p.parseIdentifier()
 	p.consume(chToken.LEFT_PAREN)
 	params := p.parseFnParameters()
 	p.consume(chToken.RIGHT_PAREN)
-	// TODO: return type annotation (optional)
+
 	var returnType *Identifier
 	if p.current.Type == chToken.ARROW {
 		p.consume(chToken.ARROW)
@@ -144,6 +167,10 @@ func (p *Parser) parseFunStatement() *FuncDeclarationStatement {
 		Params:     params,
 		Body:       body,
 		ReturnType: returnType,
+		Span: chToken.Span{
+			Start: funToken.Position,
+			End:   p.current.Position,
+		},
 	}
 }
 
@@ -279,21 +306,41 @@ func (p *Parser) parseBinaryExpression(min int) Expression {
 }
 
 func (p *Parser) parsePrimary() Expression {
+	startExprPos := p.current.Position
 	switch p.current.Type {
 	case chToken.TRUE, chToken.FALSE:
 		token := p.consume(p.current.Type)
-		return &BoolLiteral{Value: token.Literal}
+		return &BoolLiteral{Value: token.Literal, Span: chToken.Span{
+			Start: startExprPos,
+			End:   p.current.Position,
+		}}
 	case chToken.IF:
 		return p.parseIfExpression()
 	case chToken.INT_LITERAL:
 		token := p.consume(chToken.INT_LITERAL)
-		return &IntLiteral{Value: token.Literal}
+		intBase := 10
+		if token.Metadata != nil {
+			intBase = token.Metadata.IntegerBase
+		}
+		return &IntLiteral{
+			Value: token.Literal,
+			Base:  intBase,
+			Span: chToken.Span{
+				Start: startExprPos,
+				End:   p.current.Position,
+			}}
 	case chToken.FLOAT_LITERAL:
 		token := p.consume(chToken.FLOAT_LITERAL)
-		return &FloatLiteral{Value: token.Literal}
+		return &FloatLiteral{Value: token.Literal, Span: chToken.Span{
+			Start: startExprPos,
+			End:   p.current.Position,
+		}}
 	case chToken.STRING_LITERAL:
 		token := p.consume(chToken.STRING_LITERAL)
-		return &StringLiteral{Value: token.Literal}
+		return &StringLiteral{Value: token.Literal, Span: chToken.Span{
+			Start: startExprPos,
+			End:   p.current.Position,
+		}}
 	case chToken.IDENTIFIER:
 		if p.peek().Type == chToken.LEFT_PAREN {
 			return p.parseCallExpression()
@@ -307,7 +354,10 @@ func (p *Parser) parsePrimary() Expression {
 	case chToken.PLUS, chToken.MINUS, chToken.BANG:
 		op := p.consume(p.current.Type)
 		expression := p.parsePrimary()
-		return &UnaryExpression{Operator: op, Right: expression}
+		return &UnaryExpression{Operator: op, Right: expression, Span: chToken.Span{
+			Start: startExprPos,
+			End:   p.current.Position,
+		}}
 	}
 
 	previous := p.prev()
@@ -329,6 +379,7 @@ func (p *Parser) expect(t chToken.TokenType) {
 			Message:   message,
 			Help:      "",
 		})
+		panic(message)
 	}
 }
 
@@ -364,6 +415,36 @@ func (p *Parser) errorRecover() {
 	// for p.current.Type != chToken.SEMICOLON && p.current.Type != chToken.EOF {
 	// 	p.next()
 	// }
+}
+
+var statementStartTokens = map[chToken.TokenType]bool{
+	chToken.VAR:        true,
+	chToken.IF:         true,
+	chToken.FOR:        true,
+	chToken.RETURN:     true,
+	chToken.FUNCTION:   true,
+	chToken.LEFT_BRACE: true,
+}
+
+var statementEndTokens = map[chToken.TokenType]bool{
+	chToken.SEMICOLON:   true,
+	chToken.NEW_LINE:    true,
+	chToken.EOF:         true,
+	chToken.RIGHT_BRACE: true,
+}
+
+// Skip to the next statement (error recovery)
+func (p *Parser) nextStatement() {
+	for p.current.Type != chToken.EOF {
+		if _, ok := statementEndTokens[p.current.Type]; ok {
+			p.next()
+			return
+		}
+		if _, ok := statementStartTokens[p.current.Type]; ok {
+			return
+		}
+		p.next()
+	}
 }
 
 func (p *Parser) skipWhile(t chToken.TokenType) {

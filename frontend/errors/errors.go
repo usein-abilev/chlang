@@ -13,6 +13,17 @@ type CompilerError interface {
 	Error() string
 }
 
+type SyntaxWarning struct {
+	Message  string
+	HelpMsg  string
+	Span     token.Span
+	Position token.TokenPosition
+}
+
+func (e SyntaxWarning) Error() string {
+	return e.Message
+}
+
 // SyntaxError represents a syntax error in the source code.
 type SyntaxError struct {
 	Position  token.TokenPosition

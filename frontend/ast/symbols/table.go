@@ -1,7 +1,8 @@
-package checker
+package symbols
 
 import (
 	"fmt"
+
 	"github.com/usein-abilev/chlang/frontend/token"
 )
 
@@ -45,7 +46,7 @@ type SymbolEntity struct {
 	Used bool
 
 	// TODO: Use more specific type
-	InternalType LangSymbolType
+	InternalType SymbolValueType
 
 	// The type of the entity: variable, function, constant, etc.
 	EntityType SymbolEntityType
@@ -58,53 +59,64 @@ type SymbolEntity struct {
 	Position token.TokenPosition
 }
 
+type Scope struct {
+	parent  *Scope
+	symbols map[string]*SymbolEntity
+}
+
 type SymbolTable struct {
-	Parent  *SymbolTable
-	Symbols map[string]*SymbolEntity
+	current *Scope
 }
 
 func NewSymbolTable() *SymbolTable {
 	return &SymbolTable{
-		Symbols: make(map[string]*SymbolEntity),
+		current: &Scope{
+			symbols: make(map[string]*SymbolEntity),
+		},
 	}
 }
 
 func (st *SymbolTable) GetUnusedSymbols() []*SymbolEntity {
+	return getUnusedSymbolsInScope(st.current)
+}
+
+func getUnusedSymbolsInScope(scope *Scope) []*SymbolEntity {
 	var unused []*SymbolEntity
-	for _, symbol := range st.Symbols {
+	for _, symbol := range scope.symbols {
 		if !symbol.Used {
 			unused = append(unused, symbol)
 		}
 	}
-	if st.Parent != nil {
-		unused = append(unused, st.Parent.GetUnusedSymbols()...)
+	if scope.parent != nil {
+		unused = append(unused, getUnusedSymbolsInScope(scope.parent)...)
 	}
 	return unused
 }
 
-func (st *SymbolTable) OpenScope() *SymbolTable {
-	return &SymbolTable{
-		Parent:  st,
-		Symbols: make(map[string]*SymbolEntity),
+func (st *SymbolTable) OpenScope() {
+	st.current = &Scope{
+		parent:  st.current,
+		symbols: make(map[string]*SymbolEntity),
 	}
 }
 
 func (st *SymbolTable) CloseScope() {
-	st.Parent = nil
+	if st.current.parent == nil {
+		return
+	}
+	st.current = st.current.parent
 }
 
 func (st *SymbolTable) Insert(symbol *SymbolEntity) {
-	if _, ok := st.Symbols[symbol.Name]; !ok {
-		st.Symbols[symbol.Name] = symbol
+	if _, ok := st.current.symbols[symbol.Name]; !ok {
+		st.current.symbols[symbol.Name] = symbol
 		return
 	}
-
-	// should be error
-	panic("Symbol already exists")
+	panic(fmt.Sprintf("Symbol already exists %+v", symbol))
 }
 
 func (st *SymbolTable) LookupInScope(name string) *SymbolEntity {
-	symbol, ok := st.Symbols[name]
+	symbol, ok := st.current.symbols[name]
 	if !ok {
 		return nil
 	}
@@ -113,9 +125,13 @@ func (st *SymbolTable) LookupInScope(name string) *SymbolEntity {
 
 // Lookup searches for a symbol in the current scope and all parent scopes
 func (st *SymbolTable) Lookup(name string) *SymbolEntity {
-	symbol, ok := st.Symbols[name]
-	if !ok && st.Parent != nil {
-		return st.Parent.Lookup(name)
+	return st.current.lookup(name)
+}
+
+func (st *Scope) lookup(name string) *SymbolEntity {
+	symbol, ok := st.symbols[name]
+	if !ok && st.parent != nil {
+		return st.parent.lookup(name)
 	}
 	if !ok {
 		return nil
@@ -127,7 +143,7 @@ func (st *SymbolTable) Print() {
 	header := []string{"Name", "Type", "Entity Type"}
 	columnsSize := []int{0, 0, 0}
 	rows := make([][]string, 0)
-	for name, symbol := range st.Symbols {
+	for name, symbol := range st.current.symbols {
 		if len(name) > columnsSize[0] {
 			columnsSize[0] = len(name)
 		}

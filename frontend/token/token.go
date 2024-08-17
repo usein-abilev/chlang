@@ -87,6 +87,12 @@ type Token struct {
 	Position TokenPosition
 	Type     TokenType
 	Literal  string
+	Metadata *TokenMetadata
+}
+
+type TokenMetadata struct {
+	// The number base for parsing, like: 16, 10, 8, 2
+	IntegerBase int
 }
 
 type Span struct {

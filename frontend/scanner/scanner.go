@@ -316,6 +316,7 @@ func (s *Scanner) scanString() token.Token {
 
 func (s *Scanner) scanNumber() token.Token {
 	start := s.offset
+	intBase := 10
 
 	if s.char == '0' {
 		s.next() // skip zero
@@ -325,19 +326,22 @@ func (s *Scanner) scanNumber() token.Token {
 			s.next()
 			s.scanNumberByCond(isHexDigit)
 			letter = true
+			intBase = 16
 		case 'b', 'B':
 			s.next()
 			s.scanNumberByCond(isBinaryDigit)
 			letter = true
+			intBase = 2
 		case 'o', 'O':
 			s.next()
 			s.scanNumberByCond(isOctalDigit)
 			letter = true
+			intBase = 8
 		}
 
 		if letter {
 			literal := strings.ReplaceAll(s.input[start:s.offset], "_", "")
-			return s.produceToken(token.INT_LITERAL, literal)
+			return s.produceIntegerToken(literal, intBase)
 		}
 	}
 
@@ -385,10 +389,8 @@ func (s *Scanner) scanNumber() token.Token {
 			literal,
 		)
 	}
-	return s.produceToken(
-		token.INT_LITERAL,
-		literal,
-	)
+
+	return s.produceIntegerToken(literal, intBase)
 }
 
 func (s *Scanner) scanNumberByCond(cond func(rune) bool) string {
@@ -434,6 +436,19 @@ func (s *Scanner) createEOF() token.Token {
 	return s.produceToken(token.EOF, "")
 }
 
+func (s *Scanner) produceIntegerToken(value string, base int) token.Token {
+	return token.Token{
+		Type:    token.INT_LITERAL,
+		Literal: value,
+		Metadata: &token.TokenMetadata{
+			IntegerBase: base,
+		},
+		Position: token.TokenPosition{
+			Row:    s.row,
+			Column: s.column - len(value),
+		},
+	}
+}
 func (s *Scanner) produceToken(t token.TokenType, literal string) token.Token {
 	return token.Token{
 		Type:    t,

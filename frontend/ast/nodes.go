@@ -39,6 +39,7 @@ type (
 	IntLiteral struct {
 		Span  token.Span
 		Value string
+		Base  int // integer base: 16, 10, 8, 2
 	}
 	FloatLiteral struct {
 		Span  token.Span
