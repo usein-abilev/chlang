@@ -1,17 +1,4 @@
 // AST Builder implementation
-// TODO: Implement:
-// * [ ] Constant declaration
-// * [x] Function declaration
-// * [x] Function calls
-// * [ ] Function arguments spread operator
-// * [x] If-else statements
-// * [ ] For loops
-// * [ ] Range types
-// * [ ] Match/When statements
-// * [ ] Structs
-// * [ ] Struct methods
-// * [ ] Enums
-// * [ ] Arrays
 package ast
 
 import (
@@ -70,11 +57,17 @@ func (p *Parser) parseStatement() Statement {
 	switch p.current.Type {
 	case chToken.SEMICOLON, chToken.NEW_LINE:
 		p.consume(p.current.Type)
-		return &ExpressionStatement{}
+		return nil
 	case chToken.VAR:
 		return p.parseVarStatement()
+	case chToken.CONST:
+		return p.parseConstStatement()
 	case chToken.IF:
-		return &ExpressionStatement{Expression: p.parseIfExpression()}
+		expr := p.parseIfExpression()
+		if expr == nil {
+			return &BadStatement{}
+		}
+		return &ExpressionStatement{Expression: expr, Span: expr.Span}
 	case chToken.FOR:
 		log.Fatalf("For loop is not implemented yet")
 	case chToken.RETURN:
@@ -107,6 +100,7 @@ func (p *Parser) parseStatement() Statement {
 		ok := p.expectOneOf(
 			chToken.SEMICOLON,
 			chToken.NEW_LINE,
+			chToken.RIGHT_BRACE,
 		)
 		if !ok {
 			return &BadStatement{}
@@ -194,6 +188,32 @@ func (p *Parser) parseFnParameters() []*FuncArgument {
 	return params
 }
 
+func (p *Parser) parseConstStatement() *ConstDeclarationStatement {
+	constToken := p.consume(chToken.CONST)
+	identifier := p.parseIdentifier()
+
+	var varType *Identifier
+	if p.current.Type == chToken.COLON {
+		p.consume(chToken.COLON)
+		varType = p.parseIdentifier()
+	}
+
+	p.consume(chToken.ASSIGN)
+	expression := p.parseExpression()
+	p.expectOneOf(chToken.SEMICOLON, chToken.NEW_LINE)
+
+	return &ConstDeclarationStatement{
+		ConstToken: constToken,
+		Name:       identifier,
+		Type:       varType,
+		Value:      expression,
+		Span: chToken.Span{
+			Start: constToken.Position,
+			End:   p.current.Position,
+		},
+	}
+}
+
 func (p *Parser) parseVarStatement() *VarDeclarationStatement {
 	letToken := p.consume(chToken.VAR)
 	identifier := p.parseIdentifier()
@@ -267,6 +287,10 @@ func (p *Parser) parseCallExpression() *CallExpression {
 	return &CallExpression{
 		Function: identifier,
 		Args:     args,
+		Span: chToken.Span{
+			Start: identifier.Span.Start,
+			End:   p.current.Position,
+		},
 	}
 }
 
@@ -370,7 +394,7 @@ func (p *Parser) parsePrimary() Expression {
 	return nil
 }
 
-func (p *Parser) expect(t chToken.TokenType) {
+func (p *Parser) expect(t chToken.TokenType) bool {
 	if p.current.Type != t {
 		message := fmt.Sprintf("Unexpected token, expected '%s', but got '%s'", chToken.TokenSymbolName(t), chToken.TokenSymbolName(p.current.Type))
 		p.reportError(&compilerError.SyntaxError{
@@ -379,8 +403,11 @@ func (p *Parser) expect(t chToken.TokenType) {
 			Message:   message,
 			Help:      "",
 		})
-		panic(message)
+		log.Fatalf(message)
+		return false
 	}
+
+	return true
 }
 
 func (p *Parser) expectOneOf(types ...chToken.TokenType) bool {
@@ -401,6 +428,8 @@ func (p *Parser) expectOneOf(types ...chToken.TokenType) bool {
 		Message:   "unexpected token",
 		Help:      fmt.Sprintf("expected one of %s", strings.Join(typesString, ", ")),
 	})
+
+	log.Fatalf("expected one of %s, but got '%s' at %s", strings.Join(typesString, ", "), p.current.Literal, p.current.Position)
 
 	return false
 }

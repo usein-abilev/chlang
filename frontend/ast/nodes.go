@@ -1,6 +1,9 @@
 package ast
 
-import "github.com/usein-abilev/chlang/frontend/token"
+import (
+	"github.com/usein-abilev/chlang/frontend/ast/symbols"
+	"github.com/usein-abilev/chlang/frontend/token"
+)
 
 // Base types for AST nodes
 type (
@@ -82,12 +85,13 @@ type (
 		Expression Expression
 	}
 	FuncDeclarationStatement struct {
-		Span       token.Span
-		FunToken   *token.Token
-		Name       *Identifier
-		Params     []*FuncArgument
-		Body       *BlockStatement
-		ReturnType *Identifier
+		Span           token.Span
+		FunToken       *token.Token
+		Name           *Identifier
+		Params         []*FuncArgument
+		Body           *BlockStatement
+		ReturnType     *Identifier
+		SymbolMetadata *symbols.SymbolEntity
 	}
 	FuncArgument struct {
 		Name *Identifier
@@ -101,30 +105,40 @@ type (
 		Span       token.Span
 		Expression Expression
 	}
+	ConstDeclarationStatement struct {
+		Span           token.Span
+		ConstToken     *token.Token
+		Name           *Identifier
+		Type           *Identifier
+		Value          Expression
+		SymbolMetadata *symbols.SymbolEntity
+	}
 	VarDeclarationStatement struct {
 		Span     token.Span
 		LetToken *token.Token
 		Name     *Identifier
 		Type     *Identifier
 		Value    Expression
+		SymbolMetadata *symbols.SymbolEntity
 	}
 )
 
-func (Identifier) Node()               {}
-func (IntLiteral) Node()               {}
-func (BoolLiteral) Node()              {}
-func (FloatLiteral) Node()             {}
-func (StringLiteral) Node()            {}
-func (UnaryExpression) Node()          {}
-func (BinaryExpression) Node()         {}
-func (AssignExpression) Node()         {}
-func (CallExpression) Node()           {}
-func (BlockStatement) Node()           {}
-func (IfExpression) Node()             {}
-func (ExpressionStatement) Node()      {}
-func (ReturnStatement) Node()          {}
-func (VarDeclarationStatement) Node()  {}
-func (FuncDeclarationStatement) Node() {}
+func (Identifier) Node()                {}
+func (IntLiteral) Node()                {}
+func (BoolLiteral) Node()               {}
+func (FloatLiteral) Node()              {}
+func (StringLiteral) Node()             {}
+func (UnaryExpression) Node()           {}
+func (BinaryExpression) Node()          {}
+func (AssignExpression) Node()          {}
+func (CallExpression) Node()            {}
+func (BlockStatement) Node()            {}
+func (IfExpression) Node()              {}
+func (ExpressionStatement) Node()       {}
+func (ReturnStatement) Node()           {}
+func (VarDeclarationStatement) Node()   {}
+func (ConstDeclarationStatement) Node() {}
+func (FuncDeclarationStatement) Node()  {}
 
 // BadExpression are used to represent a syntax error w/o halting the parser
 func (BadExpression) Node() {}

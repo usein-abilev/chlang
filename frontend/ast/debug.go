@@ -131,6 +131,22 @@ func (ie IfExpression) PrintTree(level int) {
 	}
 }
 
+func (p ConstDeclarationStatement) PrintTree(level int) {
+	printIndent(level)
+	fmt.Printf("ConstDeclaration: %s\n", p.Name.Value)
+
+	if p.Type != nil {
+		printIndent(level + 1)
+		fmt.Printf("Type: %s\n", p.Type.Value)
+	}
+
+	if p.Value != nil {
+		printIndent(level + 1)
+		fmt.Println("Expr:")
+		p.Value.PrintTree(level + 2)
+	}
+}
+
 func (p VarDeclarationStatement) PrintTree(level int) {
 	printIndent(level)
 	fmt.Printf("VarDeclaration: %s\n", p.Name.Value)

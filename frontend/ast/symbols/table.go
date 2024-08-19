@@ -28,32 +28,27 @@ func (t SymbolEntityType) String() string {
 	return "Unknown"
 }
 
-type FuncSymbol struct {
-	Name       string
-	Args       []string
-	ReturnType string
+type FuncSymbolSignature struct {
+	Args       []*SymbolEntity
+	ReturnType SymbolValueType
 }
 
 // Represents a single symbol in the symbol table
 type SymbolEntity struct {
 	Name string
 
-	// The actual type of the symbol: i32, f64, void, etc.
-	// For functions, this field will contain the return type
-	Type string
-
 	// Whether the symbol is used in the program
 	Used bool
 
-	// TODO: Use more specific type
-	InternalType SymbolValueType
+	// The type of the symbol: i32, i64, f64, string, etc.
+	Type SymbolValueType
 
 	// The type of the entity: variable, function, constant, etc.
 	EntityType SymbolEntityType
 
 	// If the symbol is a function,
 	// this field will be contain the function's details
-	Function *FuncSymbol
+	Function *FuncSymbolSignature
 
 	// The position of the symbol in the source code
 	Position token.TokenPosition
@@ -147,13 +142,14 @@ func (st *SymbolTable) Print() {
 		if len(name) > columnsSize[0] {
 			columnsSize[0] = len(name)
 		}
-		if len(symbol.Type) > columnsSize[1] {
-			columnsSize[1] = len(symbol.Type)
+		typeString := fmt.Sprintf("%s", symbol.Type)
+		if len(typeString) > columnsSize[1] {
+			columnsSize[1] = len(typeString)
 		}
 		if len(symbol.EntityType.String()) > columnsSize[2] {
 			columnsSize[2] = len(symbol.EntityType.String())
 		}
-		rows = append(rows, []string{name, symbol.Type, symbol.EntityType.String()})
+		rows = append(rows, []string{name, typeString, symbol.EntityType.String()})
 	}
 	fmt.Print("\n---------------Symbol Table------------\n")
 	for i, h := range header {
