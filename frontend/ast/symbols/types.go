@@ -6,18 +6,18 @@ type SymbolValueType int
 const (
 	SymbolTypeInvalid SymbolValueType = iota
 	SymbolTypeInt32                   // i32
-	SymbolTypeInt64                     // i64
-	SymbolTypeUint32                    // u32
-	SymbolTypeUint64                    // u64
-	SymbolTypeFloat32                   // f32
-	SymbolTypeFloat64                   // f64
-	SymbolTypeBool                      // true, false
-	SymbolTypeString                    // string literal
-	SymbolTypeVoid                      // void
+	SymbolTypeInt64                   // i64
+	SymbolTypeUint32                  // u32
+	SymbolTypeUint64                  // u64
+	SymbolTypeFloat32                 // f32
+	SymbolTypeFloat64                 // f64
+	SymbolTypeBool                    // true, false
+	SymbolTypeString                  // string literal
+	SymbolTypeVoid                    // void
 )
 
 var langSymbolTypeTag = map[SymbolValueType]string{
-	SymbolTypeInt32: "i32",
+	SymbolTypeInt32:   "i32",
 	SymbolTypeInt64:   "i64",
 	SymbolTypeUint32:  "u32",
 	SymbolTypeUint64:  "u64",

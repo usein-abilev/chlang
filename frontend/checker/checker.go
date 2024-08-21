@@ -30,31 +30,24 @@ func Check(program *ast.Program) *Checker {
 
 	// Add built-in functions to the symbol table
 	c.addBuiltinFunctions()
+	c.populateSymbolDeclarations(program.Statements)
 
-	statements := c.sortDeclarations(program.Statements)
-	program.Statements = statements
-
-	for _, statement := range statements {
+	for _, statement := range program.Statements {
 		c.visitStatement(statement)
 	}
 
 	return c
 }
 
-// Sorts structs, functions declarations to be at the top of the file
-// This is done to ensure that the symbol table is populated correctly
-// Functions can be used before they are declared
-func (c *Checker) sortDeclarations(declarations []ast.Statement) []ast.Statement {
-	first := make([]ast.Statement, 0)
-	other := make([]ast.Statement, 0)
-	for _, declaration := range declarations {
-		if _, ok := declaration.(*ast.FuncDeclarationStatement); ok {
-			first = append(first, declaration)
-		} else {
-			other = append(other, declaration)
+// Populates symbols declarations information. This method doesn't check any types conflict
+// It stores only declaration information with no types information at all, to solve the calling each other problem
+func (c *Checker) populateSymbolDeclarations(declarations []ast.Statement) {
+	for _, statement := range declarations {
+		switch decl := statement.(type) {
+		case *ast.FuncDeclarationStatement:
+			c.visitFuncSignature(decl)
 		}
 	}
-	return append(first, other...)
 }
 
 // Adds built-in functions to the symbol table
@@ -64,6 +57,11 @@ func (c *Checker) addBuiltinFunctions() {
 		Name:       "println",
 		Type:       symbols.SymbolTypeVoid,
 		EntityType: symbols.SymbolTypeFunction,
+		Function: &symbols.FuncSymbolSignature{
+			SpreadArgument: true,
+			Args:           make([]*symbols.SymbolEntity, 0),
+			ReturnType:     symbols.SymbolTypeVoid,
+		},
 	})
 }
 
@@ -74,13 +72,13 @@ func (c *Checker) visitStatement(statement ast.Statement) {
 	case *ast.VarDeclarationStatement:
 		c.visitVarDeclaration(stmt)
 	case *ast.FuncDeclarationStatement:
-		c.visitFuncDeclaration(stmt)
+		c.visitFuncBody(stmt)
 	case *ast.ExpressionStatement:
 		c.inferExpression(stmt.Expression)
 	case *ast.BlockStatement:
 		c.SymbolTable.OpenScope()
-		sorted := c.sortDeclarations(stmt.Statements)
-		for _, statement := range sorted {
+		c.populateSymbolDeclarations(stmt.Statements)
+		for _, statement := range stmt.Statements {
 			c.visitStatement(statement)
 		}
 		c.SymbolTable.CloseScope()
@@ -176,6 +174,13 @@ func (c *Checker) visitVarDeclaration(stmt *ast.VarDeclarationStatement) {
 		varType = symbols.GetTypeByTag(stmt.Type.Value)
 	}
 
+	if varType == symbols.SymbolTypeInvalid {
+		c.Errors = append(c.Errors, &errors.SemanticError{
+			Message:  fmt.Sprintf("invalid type of variable '%s'", stmt.Name.Value),
+			Position: stmt.Span.Start,
+		})
+	}
+
 	symbol := &symbols.SymbolEntity{
 		Name:       stmt.Name.Value,
 		Type:       varType,
@@ -186,49 +191,58 @@ func (c *Checker) visitVarDeclaration(stmt *ast.VarDeclarationStatement) {
 	stmt.SymbolMetadata = symbol
 }
 
-func (c *Checker) visitFuncDeclaration(stmt *ast.FuncDeclarationStatement) {
-	if symbols.GetTypeByTag(stmt.Name.Value) != symbols.SymbolTypeInvalid {
+// Checks function signature and adds it into the symbol table
+func (c *Checker) visitFuncSignature(decl *ast.FuncDeclarationStatement) {
+	if symbols.GetTypeByTag(decl.Name.Value) != symbols.SymbolTypeInvalid {
 		c.Errors = append(c.Errors, &errors.SemanticError{
-			Message:  fmt.Sprintf("cannot use type '%s' as a function name", stmt.Name.Value),
-			Position: stmt.Span.Start,
+			Message:  fmt.Sprintf("cannot use type '%s' as a function name", decl.Name.Value),
+			Position: decl.Span.Start,
 		})
 		return
 	}
 
-	sym := c.SymbolTable.LookupInScope(stmt.Name.Value)
-	if sym != nil {
+	if sym := c.SymbolTable.LookupInScope(decl.Name.Value); sym != nil {
 		c.Errors = append(c.Errors, &errors.SemanticError{
-			Message:  fmt.Sprintf("function '%s' has already been declared at %s", stmt.Name.Value, sym.Position),
-			Position: stmt.Span.Start,
+			Message:  fmt.Sprintf("function '%s' has already been declared at %s", decl.Name.Value, sym.Position),
+			Position: decl.Span.Start,
 		})
 		return
 	}
 
 	var returnType symbols.SymbolValueType
-	if stmt.ReturnType == nil {
+	if decl.ReturnType == nil {
 		returnType = symbols.SymbolTypeVoid
 	} else {
-		returnType = symbols.GetTypeByTag(stmt.ReturnType.Value)
+		returnType = symbols.GetTypeByTag(decl.ReturnType.Value)
+	}
+
+	if returnType == symbols.SymbolTypeInvalid {
+		c.Errors = append(c.Errors, &errors.SemanticError{
+			Message:  fmt.Sprintf("invalid function '%s' return type", decl.Name.Value),
+			Position: decl.Span.Start,
+		})
+		return
 	}
 
 	// if the function is entry point, is already used
 	used := false
-	if stmt.Name.Value == "main" {
+	if decl.Name.Value == "main" {
 		used = true
 		if returnType != symbols.SymbolTypeVoid {
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message:  "main function must return void",
-				Position: stmt.Span.Start,
+				Position: decl.Span.Start,
 			})
+			return
 		}
 	}
 
 	funcSymbol := &symbols.SymbolEntity{
-		Name:       stmt.Name.Value,
+		Name:       decl.Name.Value,
 		Used:       used,
 		Type:       returnType,
 		EntityType: symbols.SymbolTypeFunction,
-		Position:   stmt.Span.Start,
+		Position:   decl.Span.Start,
 		Function: &symbols.FuncSymbolSignature{
 			Args:       make([]*symbols.SymbolEntity, 0),
 			ReturnType: returnType,
@@ -236,11 +250,7 @@ func (c *Checker) visitFuncDeclaration(stmt *ast.FuncDeclarationStatement) {
 	}
 	c.SymbolTable.Insert(funcSymbol)
 
-	// check function arguments and visit function body
-	c.SymbolTable.OpenScope()
-	c.function = funcSymbol
-
-	for _, arg := range stmt.Params {
+	for _, arg := range decl.Params {
 		internalType := symbols.GetTypeByTag(arg.Type.Value)
 		if internalType == symbols.SymbolTypeInvalid {
 			c.Errors = append(c.Errors, &errors.SemanticError{
@@ -253,6 +263,7 @@ func (c *Checker) visitFuncDeclaration(stmt *ast.FuncDeclarationStatement) {
 				Position: arg.Type.Span.Start,
 			})
 		}
+
 		argSymbol := &symbols.SymbolEntity{
 			EntityType: symbols.SymbolTypeVariable,
 			Type:       internalType,
@@ -260,13 +271,37 @@ func (c *Checker) visitFuncDeclaration(stmt *ast.FuncDeclarationStatement) {
 			Position:   arg.Name.Span.Start,
 			Used:       false,
 		}
+
+		// Note that we don't insert the arguments into the symbol table because we don't check the function body here except for the arguments.
+		// Arguments will populates into the symbol table in 'visitFuncDeclaration' function
 		funcSymbol.Function.Args = append(funcSymbol.Function.Args, argSymbol)
-		c.SymbolTable.Insert(argSymbol)
+	}
+}
+
+// Checks function body for type matching
+func (c *Checker) visitFuncBody(stmt *ast.FuncDeclarationStatement) {
+	funcSymbol := c.SymbolTable.LookupInScope(stmt.Name.Value)
+	if funcSymbol == nil {
+		// Since function declarations populates in the 'populateSymbolDeclaration' method
+		// There is no way to have 'nil' result of lookup
+		panic(fmt.Sprintf("Unexpected nil as result of lookupInScope function '%s'", stmt.Name.Value))
+	}
+
+	fmt.Printf("Updated function symbol: %+v", funcSymbol)
+	// check function arguments and visit function body
+	c.SymbolTable.OpenScope()
+	prevFuncPtr := c.function
+	c.function = funcSymbol
+
+	// Pushing arguments into symbol table, we didn't check types
+	// because it already done in the 'populateSymbolDeclarations' method
+	for _, arg := range funcSymbol.Function.Args {
+		c.SymbolTable.Insert(arg)
 	}
 
 	c.visitStatement(stmt.Body)
 	c.SymbolTable.CloseScope()
-	c.function = nil
+	c.function = prevFuncPtr
 
 	stmt.SymbolMetadata = funcSymbol
 }
@@ -289,6 +324,28 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 		}
 		sym.Used = true
 		return sym.Type
+	case *ast.AssignExpression:
+		leftType := c.inferExpression(e.Left)
+		rightType := c.inferExpression(e.Right)
+		if leftType == symbols.SymbolTypeInvalid || rightType == symbols.SymbolTypeInvalid {
+			return symbols.SymbolTypeInvalid
+		}
+		switch e.Operator.Type {
+		case token.ASSIGN:
+			if !c.isCompatibleType(leftType, rightType) {
+				c.Errors = append(c.Errors, &errors.SemanticError{
+					Message:  "incompatible type of an assign expression",
+					Position: e.Span.Start,
+				})
+				return symbols.SymbolTypeInvalid
+			}
+			return rightType
+		}
+
+		c.Errors = append(c.Errors, &errors.SemanticError{
+			Message: fmt.Sprintf("type infer: unknown expression type: %T", expr),
+		})
+		return symbols.SymbolTypeInvalid
 	case *ast.CallExpression:
 		sym := c.SymbolTable.Lookup(e.Function.Value)
 		if sym == nil {
@@ -306,22 +363,26 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 			})
 			return symbols.SymbolTypeInvalid
 		}
-		if len(sym.Function.Args) != len(e.Args) {
-			c.Errors = append(c.Errors, &errors.SemanticError{
-				Message:  fmt.Sprintf("function '%s' expects %d arguments, but got %d", e.Function.Value, len(sym.Function.Args), len(e.Args)),
-				Position: e.Span.Start,
-			})
-			return symbols.SymbolTypeInvalid
-		}
-		for idx, argExpr := range e.Args {
-			argExprType := c.inferExpression(argExpr)
-			argSymbol := sym.Function.Args[idx].Type
-			if !c.isCompatibleType(argSymbol, argExprType) {
+		if !sym.Function.SpreadArgument {
+			if len(sym.Function.Args) != len(e.Args) {
 				c.Errors = append(c.Errors, &errors.SemanticError{
-					Message:  fmt.Sprintf("function '%s' expects argument '%s' to be '%s', but got '%s'", e.Function.Value, sym.Function.Args[idx].Name, argSymbol, argExprType),
+					Message:  fmt.Sprintf("function '%s' expects %d arguments, but got %d", e.Function.Value, len(sym.Function.Args), len(e.Args)),
 					Position: e.Span.Start,
 				})
+				return symbols.SymbolTypeInvalid
 			}
+			for idx, argExpr := range e.Args {
+				argExprType := c.inferExpression(argExpr)
+				argSymbol := sym.Function.Args[idx].Type
+				if !c.isCompatibleType(argSymbol, argExprType) {
+					c.Errors = append(c.Errors, &errors.SemanticError{
+						Message:  fmt.Sprintf("function '%s' expects argument '%s' to be '%s', but got '%s'", e.Function.Value, sym.Function.Args[idx].Name, argSymbol, argExprType),
+						Position: e.Span.Start,
+					})
+				}
+			}
+		} else {
+			fmt.Printf("[warn]: Type checking of the spread arguments not implemented! Ignoring type check for function '%s'.\n", sym.Name)
 		}
 		sym.Used = true
 		return sym.Type
@@ -398,7 +459,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 	}
 
 	c.Errors = append(c.Errors, &errors.SemanticError{
-		Message: fmt.Sprintf("unknown expression type: %T", expr),
+		Message: fmt.Sprintf("type infer: unknown expression type: %T", expr),
 	})
 	return symbols.SymbolTypeInvalid
 }
@@ -418,7 +479,7 @@ func (c *Checker) inferNumberLiteralType(expression ast.Expression) symbols.Symb
 	case *ast.FloatLiteral:
 		_, err := strconv.ParseFloat(node.Value, 64)
 		if err == nil {
-			return symbols.SymbolTypeFloat32
+			return symbols.SymbolTypeFloat64
 		}
 
 		_, err = strconv.ParseInt(node.Value, 10, 32)
@@ -439,8 +500,7 @@ func (c *Checker) inferNumberLiteralType(expression ast.Expression) symbols.Symb
 func (c *Checker) inferIfBlockStatement(block *ast.BlockStatement) symbols.SymbolValueType {
 	c.SymbolTable.OpenScope()
 	returnType := symbols.SymbolTypeVoid
-	sorted := c.sortDeclarations(block.Statements)
-	for _, statement := range sorted {
+	for _, statement := range block.Statements {
 		switch stmt := statement.(type) {
 		case *ast.ExpressionStatement:
 			if stmt.Expression == nil {

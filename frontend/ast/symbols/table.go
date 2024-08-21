@@ -29,8 +29,9 @@ func (t SymbolEntityType) String() string {
 }
 
 type FuncSymbolSignature struct {
-	Args       []*SymbolEntity
-	ReturnType SymbolValueType
+	SpreadArgument bool
+	Args           []*SymbolEntity
+	ReturnType     SymbolValueType
 }
 
 // Represents a single symbol in the symbol table
