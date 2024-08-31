@@ -101,6 +101,7 @@ func (p *Parser) parseStatement() Statement {
 			chToken.SEMICOLON,
 			chToken.NEW_LINE,
 			chToken.RIGHT_BRACE,
+			chToken.EOF,
 		)
 		if !ok {
 			return &BadStatement{}
@@ -228,7 +229,7 @@ func (p *Parser) parseVarStatement() *VarDeclarationStatement {
 		p.consume(chToken.ASSIGN)
 		expression = p.parseExpression()
 	}
-	p.expectOneOf(chToken.SEMICOLON, chToken.NEW_LINE)
+	p.expectOneOf(chToken.SEMICOLON, chToken.NEW_LINE, chToken.EOF)
 
 	return &VarDeclarationStatement{
 		LetToken: letToken,
@@ -278,6 +279,7 @@ func (p *Parser) parseCallExpression() *CallExpression {
 	args := make([]Expression, 0)
 	for p.current.Type != chToken.RIGHT_PAREN {
 		arg := p.parseExpression()
+		p.skipWhile(chToken.NEW_LINE)
 		args = append(args, arg)
 		if p.current.Type == chToken.COMMA {
 			p.consume(chToken.COMMA)
@@ -330,6 +332,7 @@ func (p *Parser) parseBinaryExpression(min int) Expression {
 }
 
 func (p *Parser) parsePrimary() Expression {
+	p.skipWhile(chToken.NEW_LINE)
 	startExprPos := p.current.Position
 	switch p.current.Type {
 	case chToken.TRUE, chToken.FALSE:
@@ -429,7 +432,7 @@ func (p *Parser) expectOneOf(types ...chToken.TokenType) bool {
 		Help:      fmt.Sprintf("expected one of %s", strings.Join(typesString, ", ")),
 	})
 
-	log.Fatalf("expected one of %s, but got '%s' at %s", strings.Join(typesString, ", "), p.current.Literal, p.current.Position)
+	fmt.Printf("expected one of %s, but got '%s' at %s", strings.Join(typesString, ", "), p.current.Literal, p.current.Position)
 
 	return false
 }

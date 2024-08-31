@@ -114,11 +114,11 @@ type (
 		SymbolMetadata *symbols.SymbolEntity
 	}
 	VarDeclarationStatement struct {
-		Span     token.Span
-		LetToken *token.Token
-		Name     *Identifier
-		Type     *Identifier
-		Value    Expression
+		Span           token.Span
+		LetToken       *token.Token
+		Name           *Identifier
+		Type           *Identifier
+		Value          Expression
 		SymbolMetadata *symbols.SymbolEntity
 	}
 )
