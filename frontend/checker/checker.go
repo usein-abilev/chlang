@@ -406,7 +406,16 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 		case token.MINUS, token.PLUS:
 			if !rightType.IsNumeric() {
 				c.Errors = append(c.Errors, &errors.SemanticError{
-					Message:  fmt.Sprintf("Unary operator '%s' requires only numeric operand", e.Operator.Literal),
+					Message:  fmt.Sprintf("unary operator '%s' requires only numeric operand", e.Operator.Literal),
+					Position: e.Span.Start,
+				})
+				return symbols.SymbolTypeInvalid
+			}
+			return rightType
+		case token.BANG:
+			if rightType != symbols.SymbolTypeBool {
+				c.Errors = append(c.Errors, &errors.SemanticError{
+					Message:  fmt.Sprintf("unary operator '%s' requires only boolean operand", e.Operator.Literal),
 					Position: e.Span.Start,
 				})
 				return symbols.SymbolTypeInvalid
@@ -443,20 +452,24 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 
 		thenType := c.inferIfBlockStatement(e.ThenBlock)
 
-		for _, elseBlock := range e.ElseBlock {
-			elseType := c.inferIfBlockStatement(elseBlock)
-			if thenType != elseType {
-				c.Errors = append(c.Errors, &errors.SemanticError{
-					Message:  "cannot determine a single type of if expression",
-					HelpMsg:  "",
-					Span:     e.Span,
-					Position: e.Span.Start,
-				})
-				return symbols.SymbolTypeInvalid
-			}
+		var elseType symbols.SymbolValueType
+		switch elseBlock := e.ElseBlock.(type) {
+		case *ast.BlockStatement:
+			elseType = c.inferIfBlockStatement(elseBlock)
+		case *ast.IfExpression:
+			elseType = c.inferExpression(elseBlock)
 		}
 
-		c.SymbolTable.CloseScope()
+		if thenType != elseType {
+			c.Errors = append(c.Errors, &errors.SemanticError{
+				Message:  "cannot determine a single type of if expression",
+				HelpMsg:  "",
+				Span:     e.Span,
+				Position: e.Span.Start,
+			})
+			return symbols.SymbolTypeInvalid
+		}
+
 		return thenType
 	}
 

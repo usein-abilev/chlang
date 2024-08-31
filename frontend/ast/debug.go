@@ -122,12 +122,10 @@ func (ie IfExpression) PrintTree(level int) {
 		ie.ThenBlock.PrintTree(level + 2)
 	}
 
-	if len(ie.ElseBlock) > 0 {
+	if ie.ElseBlock != nil {
 		printIndent(level + 1)
 		fmt.Println("ElseBlock:")
-		for _, block := range ie.ElseBlock {
-			block.PrintTree(level + 2)
-		}
+		ie.ElseBlock.PrintTree(level + 2)
 	}
 }
 

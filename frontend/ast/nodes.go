@@ -73,7 +73,7 @@ type (
 		Span      token.Span
 		Condition Expression
 		ThenBlock *BlockStatement
-		ElseBlock []*BlockStatement
+		ElseBlock Statement // block statement or if expression
 	}
 	CallExpression struct {
 		Span     token.Span

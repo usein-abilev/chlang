@@ -111,6 +111,15 @@ func (s *Scanner) Scan() token.Token {
 			return s.produceToken(token.ELLIPSIS, "...")
 		}
 		return s.produceToken(token.DOT, ".")
+	case '!':
+		s.next()
+		switch s.char {
+		case '=':
+			s.next()
+			return s.produceToken(token.NOT_EQUALS, "!=")
+		default:
+			return s.produceToken(token.BANG, "!")
+		}
 	case '=':
 		s.next()
 		switch s.char {

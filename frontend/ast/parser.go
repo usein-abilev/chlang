@@ -116,14 +116,13 @@ func (p *Parser) parseIfExpression() *IfExpression {
 	p.consume(chToken.IF)
 	condition := p.parseExpression()
 	thenBlock := p.parseBlockStatement()
-	elseBlock := make([]*BlockStatement, 0)
-	for p.current.Type == chToken.ELSE {
+	var elseBlock Statement
+	if p.current.Type == chToken.ELSE {
 		p.consume(chToken.ELSE)
 		if p.current.Type == chToken.IF {
-			elseif := p.parseIfExpression()
-			elseBlock = append(elseBlock, elseif.ThenBlock)
+			elseBlock = p.parseIfExpression()
 		} else {
-			elseBlock = append(elseBlock, p.parseBlockStatement())
+			elseBlock = p.parseBlockStatement()
 		}
 	}
 
