@@ -165,13 +165,16 @@ var tokenSymbolNames = map[TokenType]string{
 const (
 	_               = iota
 	precAssign      // =, +=, -=, *=, /=, %=, &=, |=, ^=, <<=, >>=, **=
-	precBitwise     // &, |, ^
-	precLessGreater // > or <
+	precLogicalOr   // ||
+	precLogicalAnd  // &&
+	precEquals      // ==, !=
+	precLessGreater // >, <, >=, <=
+	precBitwise     // &, |, ^, <<, >>
 	precSum         // +, -
-	precEquals      // ==
 	precProduct     // *, /, %
-	precPrefix      // -X or !X
-	precHighest
+	precExponent    // ** (exponentiation)
+	precPrefix      // -X, !X (unary minus, logical NOT)
+	precHighest     // () (parentheses for explicit grouping)
 )
 
 // operatorPrecedence maps operators to their precedence (used in the parser to determine the order of operations)
@@ -188,25 +191,31 @@ var operatorPrecedence = map[TokenType]int{
 	AMPERSAND_ASSIGN:   precAssign,
 	PIPE_ASSIGN:        precAssign,
 	CARET_ASSIGN:       precAssign,
-	PLUS:               precSum,
-	MINUS:              precSum,
-	ASTERISK:           precProduct, // multiplication
-	SLASH:              precProduct, // division
-	PERCENT:            precProduct, // modulo
-	AMPERSAND:          precBitwise, // bitwise AND
-	PIPE:               precBitwise, // bitwise OR
-	CARET:              precBitwise, // bitwise XOR
-	LEFT_SHIFT:         precBitwise, // bitwise left shift
-	RIGHT_SHIFT:        precBitwise, // bitwise right shift
-	EQUALS:             precEquals,  // ==
-	NOT_EQUALS:         precEquals,  // !=
-	EXPONENT:           precHighest, // exponentiation
-	LESS:               precLessGreater,
-	LESS_EQUALS:        precLessGreater,
-	GREATER:            precLessGreater,
-	GREATER_EQUALS:     precLessGreater,
-	AND:                precLessGreater,
-	OR:                 precLessGreater,
+
+	PLUS:     precSum,
+	MINUS:    precSum,
+	ASTERISK: precProduct, // multiplication
+	SLASH:    precProduct, // division
+	PERCENT:  precProduct, // modulo
+
+	AMPERSAND:   precBitwise, // bitwise AND
+	PIPE:        precBitwise, // bitwise OR
+	CARET:       precBitwise, // bitwise XOR
+	LEFT_SHIFT:  precBitwise, // bitwise left shift
+	RIGHT_SHIFT: precBitwise, // bitwise right shift
+
+	EQUALS:     precEquals, // ==
+	NOT_EQUALS: precEquals, // !=
+
+	EXPONENT: precExponent, // exponentiation
+
+	LESS:           precLessGreater,
+	LESS_EQUALS:    precLessGreater,
+	GREATER:        precLessGreater,
+	GREATER_EQUALS: precLessGreater,
+
+	AND: precLogicalAnd, // &&
+	OR:  precLogicalOr,  // ||
 }
 
 func GetOperatorPrecedence(op TokenType) int {

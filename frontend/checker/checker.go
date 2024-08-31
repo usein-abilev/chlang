@@ -287,7 +287,6 @@ func (c *Checker) visitFuncBody(stmt *ast.FuncDeclarationStatement) {
 		panic(fmt.Sprintf("Unexpected nil as result of lookupInScope function '%s'", stmt.Name.Value))
 	}
 
-	fmt.Printf("Updated function symbol: %+v", funcSymbol)
 	// check function arguments and visit function body
 	c.SymbolTable.OpenScope()
 	prevFuncPtr := c.function
@@ -419,7 +418,10 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 		leftType := c.inferExpression(e.Left)
 		rightType := c.inferExpression(e.Right)
 		inftype, err := c.checkTypeMismatch(leftType, rightType, e.Operator)
+
 		if err != nil {
+			fmt.Printf("Error parsing binary expression: %s\n", e.Operator.Literal)
+			e.PrintTree(2)
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message:  err.Error(),
 				Position: e.Span.Start,
@@ -522,23 +524,24 @@ func (c *Checker) isCompatibleType(a, b symbols.SymbolValueType) bool {
 
 func (c *Checker) checkTypeMismatch(a, b symbols.SymbolValueType, operator *token.Token) (symbols.SymbolValueType, error) {
 	switch operator.Type {
-	case token.PLUS, token.MINUS, token.ASTERISK, token.SLASH:
+	case token.PLUS, token.MINUS, token.ASTERISK, token.SLASH, token.EXPONENT:
 		if a == b {
 			return a, nil
 		}
 		if !a.IsNumeric() || !b.IsNumeric() {
 			return symbols.SymbolTypeInvalid, &errors.SemanticError{
-				Message:  fmt.Sprintf("operator '%s' requires numeric operands", operator.Literal),
+				Message:  fmt.Sprintf("typecheck: operator '%s' requires numeric operands", operator.Literal),
 				Position: operator.Position,
 				HelpMsg:  fmt.Sprintf("got '%s' and '%s'", a, b),
 			}
 		}
 		return a, nil
-	case token.EQUALS, token.NOT_EQUALS, token.LESS, token.LESS_EQUALS, token.GREATER, token.GREATER_EQUALS:
+	case token.EQUALS, token.NOT_EQUALS, token.LESS,
+		token.LESS_EQUALS, token.GREATER, token.GREATER_EQUALS, token.AND, token.OR:
 		if a == b {
 			return symbols.SymbolTypeBool, nil
 		}
-		return symbols.SymbolTypeInvalid, fmt.Errorf("operator '%s' requires operands of the same type", operator.Literal)
+		return symbols.SymbolTypeInvalid, fmt.Errorf("typecheck: operator '%s' requires operands of the same type (left: %s, right: %s)", operator.Literal, a, b)
 	}
-	return symbols.SymbolTypeInvalid, fmt.Errorf("unknown operator: %s", operator.Literal)
+	return symbols.SymbolTypeInvalid, fmt.Errorf("typecheck: unknown operator: %s", operator.Literal)
 }
