@@ -315,7 +315,7 @@ func (s *Scanner) scanString() token.Token {
 	}
 
 	s.next()
-	literal := s.input[start+1:s.offset-1]
+	literal := s.input[start:s.offset]
 	return token.Token{
 		Literal:  literal,
 		Type:     token.STRING_LITERAL,
