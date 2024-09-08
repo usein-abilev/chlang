@@ -381,6 +381,12 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 				}
 			}
 		} else {
+			for _, argExpr := range e.Args {
+				t := c.inferExpression(argExpr)
+				if t == symbols.SymbolTypeInvalid {
+					return symbols.SymbolTypeInvalid
+				}
+			}
 			fmt.Printf("[warn]: Type checking of the spread arguments not implemented! Ignoring type check for function '%s'.\n", sym.Name)
 		}
 		sym.Used = true
@@ -429,7 +435,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 		inftype, err := c.checkTypeMismatch(leftType, rightType, e.Operator)
 
 		if err != nil {
-			fmt.Printf("Error parsing binary expression: %s\n", e.Operator.Literal)
+			fmt.Printf("Error checking binary expression: %s\n", e.Operator.Literal)
 			e.PrintTree(2)
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message:  err.Error(),
