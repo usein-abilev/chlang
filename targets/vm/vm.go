@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	minStackFrameSize = 0xf
+	minStackFrameSize = 0xff
 	maxStackSize      = 0xFFFF
 )
 
@@ -35,9 +35,14 @@ type VM struct {
 	stack         Stack      // stack of 64-bit values (registers, parameters for function, locals, etc.)
 	stackCapacity int        // current stack capacity
 	callRecord    *CallFrame // current call record
+	options       *VMOptions // VM options (debug, etc.)
 }
 
-func NewVM(module *FunctionObject) *VM {
+type VMOptions struct {
+	Debug bool
+}
+
+func NewVM(module *FunctionObject, opts *VMOptions) *VM {
 	stack := make(Stack, minStackFrameSize)
 	record := &CallFrame{
 		base:     0,
@@ -49,11 +54,21 @@ func NewVM(module *FunctionObject) *VM {
 		stack:         stack,
 		stackCapacity: minStackFrameSize,
 		callRecord:    record,
+		options:       opts,
 	}
 	return vm
 }
 
-func (vm VM) Print() {
+func (vm *VM) debug(format string, args ...interface{}) {
+	if vm.options.Debug {
+		fmt.Printf(format, args...)
+	}
+}
+
+func (vm *VM) printStack() {
+	if !vm.options.Debug {
+		return
+	}
 	fmt.Printf("-----------------------------------\nStack: \n")
 	for i, slot := range vm.stack {
 		fmt.Printf("S%d: kind=%s, value=%d", i, slot.Kind, slot.Value)
@@ -78,16 +93,17 @@ func (vm VM) Print() {
 }
 
 func (vm *VM) Run() {
+main_loop:
 	for {
 		base := RegisterAddress(vm.callRecord.base)
 		instruction := vm.fetch()
 		if instruction == nil {
-			return
+			break
 		}
 		opcode, operands := instruction.opcode, instruction.operands
 		switch opcode {
 		case OpcodeHalt:
-			return
+			break main_loop
 		case OpcodeLoadImm32:
 			address := operands[0].(RegisterAddress)
 			operand := operands[1].(int64) // TODO: For now, keep it as int64
@@ -106,11 +122,22 @@ func (vm *VM) Run() {
 			target := operands[0].(RegisterAddress)
 			value := operands[1].(string)
 			constant := vm.callRecord.function.lookupConstant(value)
+			if constant == nil {
+				panic(fmt.Sprintf("vm: unresolved symbol '%s'", value))
+			}
 			vm.setStackValue(base+target, &OperandValue{
 				Kind:  constant.Kind,
 				Value: constant.Value,
 			})
-		case OpcodeAdd, OpcodeSub, OpcodeMul, OpcodeDiv, OpcodeAnd, OpcodeOr, OpcodeEq:
+		case OpcodeLoadString:
+			target := operands[0].(RegisterAddress)
+			value := operands[1].(string)
+			vm.setStackValue(base+target, &OperandValue{
+				Kind:  OperandTypeString,
+				Value: value,
+			})
+		case OpcodeAdd, OpcodeSub, OpcodeMul, OpcodeDiv, OpcodeBitwiseAnd, OpcodeBitwiseOr,
+			OpcodeEq, OpcodeGt, OpcodeGte, OpcodeLt, OpcodeLte:
 			target := operands[0].(RegisterAddress)
 			operand1 := operands[1].(RegisterAddress)
 			operand2 := operands[2].(RegisterAddress)
@@ -134,7 +161,7 @@ func (vm *VM) Run() {
 				vm.ip = uint32(address)
 			}
 		case OpcodeSyscall:
-			fmt.Printf("[syscall]: %d\n", operands[0])
+			vm.debug("[syscall]: %d\n", operands[0])
 		case OpcodeCall:
 			function := operands[0].(RegisterAddress)
 			args := operands[1].(int)
@@ -144,7 +171,7 @@ func (vm *VM) Run() {
 			from := operands[0].(RegisterAddress)
 			count := operands[1].(int)
 
-			fmt.Printf("RETURN CALL! ip:%d, %d %d\n", vm.ip, from, count)
+			vm.debug("RETURN CALL! ip:%d, %d %d\n", vm.ip, from, count)
 
 			skipUntil := vm.callRecord.base + from + RegisterAddress(count)
 			if RegisterAddress(skipUntil) > vm.callRecord.top {
@@ -156,22 +183,38 @@ func (vm *VM) Run() {
 			vm.ip = uint32(vm.callRecord.returnAddress) // go back to parent
 			vm.callRecord = vm.callRecord.parent
 		default:
-			fmt.Printf("error: unknown opcode: %v\n", opcode)
+			panic(fmt.Sprintf("error: unknown opcode: %v\n", opcode))
 		}
 	}
+
+	vm.printStack()
 }
 
 func (vm *VM) performBinaryOperation(opcode Opcode, register, x, y RegisterAddress) {
 	operandX := vm.stack[x]
 	operandY := vm.stack[y]
 
-	if opcode == OpcodeEq {
+	if opcode == OpcodeEq || opcode == OpcodeGt || opcode == OpcodeGte || opcode == OpcodeLt || opcode == OpcodeLte {
 		if operandX.Kind != operandY.Kind {
 			panic(fmt.Sprintf("vm: invalid operand type '%s' and '%s'", operandX.Kind, operandY.Kind))
 		}
+		var result bool
+		switch opcode {
+		case OpcodeEq:
+			result = operandX.Value == operandY.Value
+		case OpcodeGt:
+			result = operandX.Value.(int64) > operandY.Value.(int64)
+		case OpcodeGte:
+			result = operandX.Value.(int64) >= operandY.Value.(int64)
+		case OpcodeLt:
+			result = operandX.Value.(int64) < operandY.Value.(int64)
+		case OpcodeLte:
+			result = operandX.Value.(int64) <= operandY.Value.(int64)
+		}
+
 		vm.setStackValue(register, &OperandValue{
 			Kind:  OperandTypeBool,
-			Value: operandX.Value == operandY.Value,
+			Value: result,
 		})
 		return
 	}
@@ -204,9 +247,9 @@ func (vm *VM) performBinaryOperation(opcode Opcode, register, x, y RegisterAddre
 		valueY = operandY.Value.(bool)
 
 		switch opcode {
-		case OpcodeAnd:
+		case OpcodeBitwiseAnd:
 			result = valueX && valueY
-		case OpcodeOr:
+		case OpcodeBitwiseOr:
 			result = valueX || valueY
 		default:
 			panic(fmt.Sprintf("vm: unknown binary opcode '%s'", opcode))
@@ -244,13 +287,20 @@ func (vm *VM) setStackValue(index RegisterAddress, slot *OperandValue) {
 // LoadImm 2, 20	; Load value 20 to the register 2
 // Call 0, 2, 1 	; Call sum function with 2 arguments and 1 return value
 func (vm *VM) callFunc(function RegisterAddress, args int, results int) {
-	fmt.Printf("[func call]: Calling a function at address %d (args=%d, rets=%d, used=%d)\n", function, args, results, vm.callRecord.usedSize)
+	vm.debug("[func call]: Calling a function at address %d (args=%d, rets=%d, used=%d)\n", function, args, results, vm.callRecord.usedSize)
 	parentFrame := vm.callRecord
+	functionBasePointer := parentFrame.base + function + 1 // base starts at the first argument if exists (addressReg + 1)
 	functionObj := vm.stack[parentFrame.base+function]
-	if functionObj.Kind != OperandTypeFunctionObject {
+	if functionObj.Kind == OperandTypeBuildInFunction {
+		var operands []*OperandValue
+		for i := 0; i < args; i++ {
+			operands = append(operands, &vm.stack[functionBasePointer+RegisterAddress(i)])
+		}
+		functionObj.Value.(func(operands []*OperandValue))(operands)
+		return
+	} else if functionObj.Kind != OperandTypeFunctionObject {
 		panic(fmt.Sprintf("Invalid function object to perform call! %T", functionObj))
 	}
-	functionBasePointer := parentFrame.base + function + 1 // base starts at the first argument if exists (addressReg + 1)
 	vm.callRecord = &CallFrame{
 		args:          uint64(args),
 		results:       uint64(results),
@@ -261,7 +311,7 @@ func (vm *VM) callFunc(function RegisterAddress, args int, results int) {
 		returnAddress: RegisterAddress(vm.ip),
 	}
 	vm.ip = 0
-	fmt.Printf("[func call]: New function call record: base=%d, top=%d, return=%d\n", vm.callRecord.base, vm.callRecord.top, vm.callRecord.returnAddress)
+	vm.debug("[func call]: New function call record: base=%d, top=%d, return=%d\n", vm.callRecord.base, vm.callRecord.top, vm.callRecord.returnAddress)
 
 	// resize the stack if necessary
 	if vm.callRecord.top.AsInt() > vm.stackCapacity {

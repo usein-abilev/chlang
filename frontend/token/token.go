@@ -244,6 +244,15 @@ func IsAssignment(op TokenType) bool {
 	return false
 }
 
+func IsLogicalOperator(op TokenType) bool {
+	switch op {
+	case AND, OR:
+		return true
+	default:
+		return false
+	}
+}
+
 // Maps keywords to their token type (used in the lexer to determinate whether an identifier is a keyword)
 var identTokens = map[string]TokenType{
 	"let":    VAR,

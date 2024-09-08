@@ -22,11 +22,21 @@ type RVMGenerator struct {
 
 func NewRVMGenerator(program *ast.Program) *RVMGenerator {
 	moduleFunction := &FunctionObject{
+		name:         "<module>",
 		instructions: make([]VMInstruction, 0),
 		contextType:  ModuleContext,
 		registers:    make([]LocalRegister, 0),
 		constants:    make(map[string]OperandValue),
 	}
+
+	// add build-in functions
+	for name, function := range BuildInFunctions {
+		moduleFunction.addConstant(name, OperandValue{
+			Kind:  OperandTypeBuildInFunction,
+			Value: function,
+		})
+	}
+
 	return &RVMGenerator{
 		program:   program,
 		function:  moduleFunction,
@@ -55,7 +65,6 @@ func (g *RVMGenerator) emitStatement(statement ast.Statement) {
 	case *ast.ReturnStatement:
 		returnRegister := g.emitExpressionToRegister(statement.Expression)
 		g.builder.Emit(OpcodeReturn, returnRegister, 1)
-		g.builder.Print()
 	case *ast.ExpressionStatement:
 		g.emitExpressionToRegister(statement.Expression)
 	case *ast.BlockStatement:
@@ -89,6 +98,7 @@ func (g *RVMGenerator) visitVarDeclaration(decl *ast.VarDeclarationStatement) {
 func (g *RVMGenerator) visitFuncDeclaration(decl *ast.FuncDeclarationStatement) {
 	parentFunction := g.function
 	g.function = &FunctionObject{
+		name:         decl.Name.Value,
 		parent:       parentFunction,
 		contextType:  FunctionContext,
 		instructions: make([]VMInstruction, 0),
@@ -152,7 +162,11 @@ func (g *RVMGenerator) emitExpressionToRegister(expression ast.Expression) Regis
 		calleeReg := g.allocator.AllocateTempRegister()
 		g.builder.Emit(OpcodeLoadConst, calleeReg, expr.Function.Value)
 		for _, argumentExpr := range expr.Args {
-			g.emitExpressionToRegister(argumentExpr)
+			register := g.emitExpressionToRegister(argumentExpr)
+			if !g.allocator.IsTempRegister(register) {
+				tempRegister := g.allocator.AllocateTempRegister()
+				g.builder.Emit(OpcodeMove, tempRegister, register)
+			}
 		}
 		g.builder.Emit(OpcodeCall, calleeReg, len(expr.Args), 1)
 		returnAddress := g.allocator.AllocateTempRegister()
@@ -168,6 +182,24 @@ func (g *RVMGenerator) emitExpressionToRegister(expression ast.Expression) Regis
 		panic(fmt.Sprintf("unknown assign expression operator '%s'", expr.Operator.Literal))
 	case *ast.BinaryExpression:
 		targetReg := g.allocator.AllocateTempRegister()
+
+		if token.IsLogicalOperator(expr.Operator.Type) {
+			// logical operators are not implemented yet
+			switch expr.Operator.Type {
+			case token.AND:
+				leftReg := g.emitExpressionToRegister(expr.Left)
+				falseBranch := g.builder.Emit(OpcodeJumpIf)
+				rightReg := g.emitExpressionToRegister(expr.Right)
+				g.builder.PatchInstruction(falseBranch, leftReg, false, RegisterAddress(len(g.function.instructions)))
+				g.builder.Emit(OpcodeMove, targetReg, rightReg)
+			case token.OR:
+				// g.builder.Emit(OpcodeBitwiseOr, targetReg, leftReg, rightReg)
+			default:
+				panic(fmt.Sprintf("error: unknown logical operator '%s'", expr.Operator.Literal))
+			}
+			return targetReg
+		}
+
 		leftReg := g.emitExpressionToRegister(expr.Left)
 		rightReg := g.emitExpressionToRegister(expr.Right)
 
@@ -180,12 +212,12 @@ func (g *RVMGenerator) emitExpressionToRegister(expression ast.Expression) Regis
 			g.builder.Emit(OpcodeMul, targetReg, leftReg, rightReg)
 		case token.SLASH:
 			g.builder.Emit(OpcodeDiv, targetReg, leftReg, rightReg)
-		case token.AND:
-			g.builder.Emit(OpcodeAnd, targetReg, leftReg, rightReg)
-		case token.OR:
-			g.builder.Emit(OpcodeOr, targetReg, leftReg, rightReg)
 		case token.EQUALS:
 			g.builder.Emit(OpcodeEq, targetReg, leftReg, rightReg)
+		case token.GREATER:
+			g.builder.Emit(OpcodeGt, targetReg, leftReg, rightReg)
+		case token.LESS:
+			g.builder.Emit(OpcodeLt, targetReg, leftReg, rightReg)
 		default:
 			panic(fmt.Sprintf("error: unknown operator '%s'", expr.Operator.Literal))
 		}
@@ -209,17 +241,22 @@ func (g *RVMGenerator) emitExpressionToRegister(expression ast.Expression) Regis
 		reg := g.allocator.AllocateTempRegister()
 		g.builder.Emit(OpcodeLoadBool, reg, value)
 		return reg
+	case *ast.StringLiteral:
+		reg := g.allocator.AllocateTempRegister()
+		g.builder.Emit(OpcodeLoadString, reg, expr.Value)
+		return reg
 	case *ast.Identifier:
 		local, ok := g.allocator.LookupVariable(expr.Value)
-		registerId := local.register
 		if !ok {
 			if constant := g.function.lookupConstant(expr.Value); constant == nil {
 				panic(fmt.Sprintf("error: unresolved symbol '%s' at %s\n", expr.Value, expr.Token.Position))
 			}
 			registerId := g.allocator.AllocateTempRegister()
 			g.builder.Emit(OpcodeLoadConst, registerId, expr.Value)
+			return registerId
+		} else {
+			return local.register
 		}
-		return registerId
 	}
 
 	panic(fmt.Sprintf("error: unknown expression type: %T", expression))

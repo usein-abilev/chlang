@@ -104,6 +104,7 @@ func (p *Parser) parseStatement() Statement {
 			chToken.EOF,
 		)
 		if !ok {
+			p.nextStatement()
 			return &BadStatement{}
 		}
 		return &ExpressionStatement{Expression: expr}

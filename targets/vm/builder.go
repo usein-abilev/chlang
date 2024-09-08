@@ -10,9 +10,7 @@ type ASMBuilder struct {
 }
 
 func NewASMBuilder(function *FunctionObject) *ASMBuilder {
-	return &ASMBuilder{
-		function: function,
-	}
+	return &ASMBuilder{function}
 }
 
 func (builder *ASMBuilder) Emit(opcode Opcode, operands ...any) int {
@@ -30,7 +28,7 @@ func (builder *ASMBuilder) PatchInstruction(opcodeAddress int, operands ...any) 
 }
 
 func (builder *ASMBuilder) Print() {
-	fmt.Printf("-----------------------------------\nGenerated Code: \n")
+	fmt.Printf("-----------------------------------\nGenerated Code of \"%s\": \n", builder.function.name)
 	opcodeWidth := 10
 	operandWidth := 3
 	for i, instruction := range builder.function.instructions {

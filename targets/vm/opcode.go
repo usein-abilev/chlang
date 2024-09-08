@@ -16,6 +16,9 @@ const (
 	// Loads boolean value to register R(x)
 	OpcodeLoadBool
 
+	// Loads string to register R(x)
+	OpcodeLoadString
+
 	// Loads immediate 32-bit signed integer to register R(x)
 	OpcodeLoadImm32 // R(x) = y, LoadImm4 x y
 
@@ -34,14 +37,26 @@ const (
 	// Divides two integers and stores the result in register R(x)
 	OpcodeDiv // R(x) = R(y) / R(z), DivInt4 x y z
 
-	// Performs logical AND operation
-	OpcodeAnd // R(x) = R(y) && R(z)
+	// Performs bitwise AND operation
+	OpcodeBitwiseAnd // R(x) = R(y) & R(z)
 
-	// Performs logical OR operation
-	OpcodeOr // R(x) = R(y) || R(z)
+	// Performs bitwise OR operation
+	OpcodeBitwiseOr // R(x) = R(y) | R(z)
 
 	// Performs equality check
 	OpcodeEq // R(x) = R(y) == R(z)
+
+	// Performs greater than operation
+	OpcodeGt // R(x) = R(y) > R(z)
+
+	// Greater than or equal
+	OpcodeGte // R(x) = R(y) >= R(z)
+
+	// Less than
+	OpcodeLt // R(x) = R(y) < R(z)
+
+	// Less than or equal
+	OpcodeLte // R(x) = R(y) <= R(z)
 
 	// Inverts the boolean value of a register
 	OpcodeNot // R(x) = !R(y)
@@ -66,26 +81,31 @@ const (
 )
 
 var opcodeNames = map[Opcode]string{
-	OpcodeMove:      "Move",
-	OpcodeLoadImm32: "LoadImm32",
-	OpcodeLoadBool:  "LoadBool",
-	OpcodeLoadConst: "LoadConst",
-	OpcodeAdd:       "Add",
-	OpcodeAddImm32:  "AddImm4",
-	OpcodeSub:       "Sub",
-	OpcodeMul:       "Mul",
-	OpcodeDiv:       "Div",
-	OpcodeAnd:       "And",
-	OpcodeOr:        "Or",
-	OpcodeEq:        "Eq",
-	OpcodeNot:       "Not",
-	OpcodeJump:      "Jump",
-	OpcodeJumpIf:    "JumpIf",
-	OpcodeCall:      "Call",
-	OpcodeSyscall:   "Syscall",
-	OpcodeReturn:    "Return",
-	OpcodeHalt:      "Halt",
-	OpcodeNop:       "Nop",
+	OpcodeMove:       "Move",
+	OpcodeLoadImm32:  "LoadImm32",
+	OpcodeLoadBool:   "LoadBool",
+	OpcodeLoadConst:  "LoadConst",
+	OpcodeLoadString: "LoadString",
+	OpcodeAdd:        "Add",
+	OpcodeAddImm32:   "AddImm4",
+	OpcodeSub:        "Sub",
+	OpcodeMul:        "Mul",
+	OpcodeDiv:        "Div",
+	OpcodeBitwiseAnd: "And",
+	OpcodeBitwiseOr:  "Or",
+	OpcodeEq:         "Eq",
+	OpcodeGt:         "Gt",
+	OpcodeGte:        "Gte",
+	OpcodeLt:         "Lt",
+	OpcodeLte:        "Lte",
+	OpcodeNot:        "Not",
+	OpcodeJump:       "Jump",
+	OpcodeJumpIf:     "JumpIf",
+	OpcodeCall:       "Call",
+	OpcodeSyscall:    "Syscall",
+	OpcodeReturn:     "Return",
+	OpcodeHalt:       "Halt",
+	OpcodeNop:        "Nop",
 }
 
 func (op Opcode) String() string {

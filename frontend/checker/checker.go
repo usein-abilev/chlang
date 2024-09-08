@@ -452,6 +452,10 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 
 		thenType := c.inferIfBlockStatement(e.ThenBlock)
 
+		if e.ElseBlock == nil {
+			return thenType
+		}
+
 		var elseType symbols.SymbolValueType
 		switch elseBlock := e.ElseBlock.(type) {
 		case *ast.BlockStatement:
@@ -462,7 +466,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 
 		if thenType != elseType {
 			c.Errors = append(c.Errors, &errors.SemanticError{
-				Message:  "cannot determine a single type of if expression",
+				Message:  fmt.Sprintf("cannot determine a single type of if expression (then: %s, else: %s)", thenType, elseType),
 				HelpMsg:  "",
 				Span:     e.Span,
 				Position: e.Span.Start,

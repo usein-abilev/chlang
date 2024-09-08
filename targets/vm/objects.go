@@ -13,6 +13,7 @@ const (
 	OperandTypeBool
 	OperandTypeString
 	OperandTypeFunctionObject
+	OperandTypeBuildInFunction
 )
 
 type OperandValue struct {
@@ -48,6 +49,8 @@ func (ovt OperandValueType) String() string {
 		return "string"
 	case OperandTypeFunctionObject:
 		return "function"
+	case OperandTypeBuildInFunction:
+		return "build-in-function"
 	}
 	return "undefined"
 }
@@ -77,6 +80,7 @@ type RegisterTable []LocalRegister
 // FunctionObject represents a function or module context in the VM.
 // It contains the function's instructions, type of context, constants, registers, and parent context.
 type FunctionObject struct {
+	name         string
 	constants    map[string]OperandValue
 	instructions []VMInstruction
 	registers    RegisterTable
