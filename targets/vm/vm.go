@@ -66,11 +66,11 @@ func (vm *VM) debug(format string, args ...interface{}) {
 }
 
 func (vm *VM) printStack() {
-	if !vm.options.Debug {
-		return
-	}
 	fmt.Printf("-----------------------------------\nStack: \n")
 	for i, slot := range vm.stack {
+		if slot.Kind == OperandTypeUndefined {
+			continue
+		}
 		fmt.Printf("S%d: kind=%s, value=%d", i, slot.Kind, slot.Value)
 		idx := RegisterAddress(i)
 		if vm.callRecord.parent != nil {
@@ -160,8 +160,6 @@ main_loop:
 			if vm.stack[base+value].Value == condition {
 				vm.ip = uint32(address)
 			}
-		case OpcodeSyscall:
-			vm.debug("[syscall]: %d\n", operands[0])
 		case OpcodeCall:
 			function := operands[0].(RegisterAddress)
 			args := operands[1].(int)
@@ -171,15 +169,12 @@ main_loop:
 			from := operands[0].(RegisterAddress)
 			count := operands[1].(int)
 
-			vm.debug("RETURN CALL! ip:%d, %d %d\n", vm.ip, from, count)
+			// return values are stored after the arguments
+			returnStartIdx := vm.callRecord.base - 1
+			for i := 0; i < count; i++ {
+				vm.setStackValue(returnStartIdx+RegisterAddress(i), &vm.stack[base+from+RegisterAddress(i)])
+			}
 
-			skipUntil := vm.callRecord.base + from + RegisterAddress(count)
-			if RegisterAddress(skipUntil) > vm.callRecord.top {
-				panic("Invalid return instruction")
-			}
-			for i := skipUntil; i < vm.callRecord.top; i++ {
-				vm.setStackNullValue(uint64(i))
-			}
 			vm.ip = uint32(vm.callRecord.returnAddress) // go back to parent
 			vm.callRecord = vm.callRecord.parent
 		default:
@@ -187,7 +182,9 @@ main_loop:
 		}
 	}
 
-	vm.printStack()
+	if vm.options.Debug {
+		vm.printStack()
+	}
 }
 
 func (vm *VM) performBinaryOperation(opcode Opcode, register, x, y RegisterAddress) {

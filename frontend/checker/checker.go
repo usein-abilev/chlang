@@ -289,6 +289,7 @@ func (c *Checker) visitFuncBody(stmt *ast.FuncDeclarationStatement) {
 
 	// check function arguments and visit function body
 	c.SymbolTable.OpenScope()
+	c.populateSymbolDeclarations(stmt.Body.Statements)
 	prevFuncPtr := c.function
 	c.function = funcSymbol
 
@@ -524,6 +525,7 @@ func (c *Checker) inferNumberLiteralType(expression ast.Expression) symbols.Symb
 
 func (c *Checker) inferIfBlockStatement(block *ast.BlockStatement) symbols.SymbolValueType {
 	c.SymbolTable.OpenScope()
+	c.populateSymbolDeclarations(block.Statements)
 	returnType := symbols.SymbolTypeVoid
 	for _, statement := range block.Statements {
 		switch stmt := statement.(type) {

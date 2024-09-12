@@ -11,6 +11,9 @@ type RegisterAllocator struct {
 	// The register table contains the mapping of variable names to register addresses.
 	table *RegisterTable
 
+	// The list of registers that are freed and can be reused.
+	freed []int
+
 	// Determinate the current scope depth
 	scopeDepth int
 }
@@ -34,10 +37,10 @@ func (r *RegisterAllocator) LeaveScope() {
 
 	// remove all variables in the current scope
 	table := *r.table
-	idx := len(table) - 1
-	for ; table[idx].depth == r.scopeDepth; idx-- {
+	for idx := len(table) - 1; table[idx].depth == r.scopeDepth; idx-- {
+		r.freed = append(r.freed, table[idx].register.AsInt())
+		table[idx].name = ""
 	}
-	*r.table = table[:idx+1]
 
 	r.scopeDepth--
 }
@@ -47,9 +50,16 @@ func (r *RegisterAllocator) IsTempRegister(address RegisterAddress) bool {
 	return (*r.table)[address.AsInt()].name == tempVariableName
 }
 
-// AllocateTempRegister allocates a temporary register for intermediate values.
-func (r *RegisterAllocator) AllocateTempRegister() RegisterAddress {
-	return r.AllocateRegister(tempVariableName)
+// AllocateTemp allocates a temporary register for intermediate values.
+func (r *RegisterAllocator) AllocateTemp() RegisterAddress {
+	return r.Allocate(tempVariableName)
+}
+
+// FreeTemp frees the temporary register.
+func (r *RegisterAllocator) FreeTemp(address RegisterAddress) {
+	if r.IsTempRegister(address) {
+		r.Free(tempVariableName)
+	}
 }
 
 // Binds a register to variable name, the register must be a temporary or free.
@@ -57,35 +67,68 @@ func (r *RegisterAllocator) AllocateTempRegister() RegisterAddress {
 func (r *RegisterAllocator) BindRegister(name string, address RegisterAddress) bool {
 	r.checkRegisterBoundary(address)
 	local := &(*r.table)[address.AsInt()]
-	if local.name != tempVariableName {
-		return false
+	if local.name == tempVariableName || local.name == "" {
+		r.takeFreeRegister(address)
+		local.name = name
+		return true
 	}
-	local.name = name
-	return true
+	panic("cannot bind a register that is already bound to " + local.name)
 }
 
-// AllocateRegister allocates a register for the given variable name.
-func (r *RegisterAllocator) AllocateRegister(name string) RegisterAddress {
-	if name != tempVariableName {
-		local, exists := r.table.LookupName(name)
+// Allocate allocates a register for the given variable name.
+func (r *RegisterAllocator) Allocate(variable string) RegisterAddress {
+	if variable != tempVariableName {
+		local, exists := r.table.LookupName(variable)
 		if exists {
 			return local.register
 		}
 	}
 
-	address := RegisterAddress(len(*r.table))
 	local := &LocalRegister{
-		name:     name,
-		register: address,
-		depth:    r.scopeDepth,
+		name:  variable,
+		depth: r.scopeDepth,
 	}
-	*r.table = append(*r.table, *local)
+
+	if len(r.freed) > 0 {
+		index := r.freed[0]
+		local.register = RegisterAddress(index)
+		r.freed = r.freed[1:]
+		(*r.table)[index] = *local
+	} else {
+		local.register = RegisterAddress(len(*r.table))
+		*r.table = append(*r.table, *local)
+	}
+
 	return local.register
+}
+
+// Free frees the register for the given variable name.
+func (r *RegisterAllocator) Free(variable string) {
+	local, exists := r.table.LookupName(variable)
+	if !exists {
+		return
+	}
+	local.name = ""
+	r.freed = append(r.freed, local.register.AsInt())
 }
 
 // LookupVariable returns the register address for the given variable name.
 func (r *RegisterAllocator) LookupVariable(name string) (*LocalRegister, bool) {
 	return r.table.LookupName(name)
+}
+
+// Take the register out of the freed list
+func (r *RegisterAllocator) takeFreeRegister(address RegisterAddress) {
+	removeIdx := -1
+	for i := len(r.freed) - 1; i >= 0; i-- {
+		if r.freed[i] == address.AsInt() {
+			removeIdx = i
+			break
+		}
+	}
+	if removeIdx != -1 {
+		r.freed = append(r.freed[:removeIdx], r.freed[removeIdx+1:]...)
+	}
 }
 
 func (r *RegisterAllocator) checkRegisterBoundary(address RegisterAddress) {

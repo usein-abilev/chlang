@@ -70,9 +70,6 @@ const (
 	// OpcodeCall a function. This instruction accepts a 3 operand: address (function reference stored in register), number of arguments, and number of return values
 	OpcodeCall
 
-	// System call. This instruction accepts a 1 operand: system call number
-	OpcodeSyscall
-
 	// OpcodeReturn from a function
 	OpcodeReturn
 
@@ -102,7 +99,6 @@ var opcodeNames = map[Opcode]string{
 	OpcodeJump:       "Jump",
 	OpcodeJumpIf:     "JumpIf",
 	OpcodeCall:       "Call",
-	OpcodeSyscall:    "Syscall",
 	OpcodeReturn:     "Return",
 	OpcodeHalt:       "Halt",
 	OpcodeNop:        "Nop",
