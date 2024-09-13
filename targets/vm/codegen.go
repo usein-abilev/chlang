@@ -71,22 +71,24 @@ func (g *RVMGenerator) emitStatement(statement ast.Statement) {
 	case *ast.FuncDeclarationStatement:
 		g.visitFuncDeclaration(statement)
 	case *ast.ForRangeStatement:
-		fmt.Printf("parsing for-range statement:\n")
-		statement.PrintTree(2)
-
 		forAllocator := g.allocator
 		forAllocator.EnterScope()
 
 		// prologue
 		loopVar := g.allocator.Allocate(statement.Identifier.Value)
-		startReg := g.emitExpressionToRegister(statement.Range[0])
+		startReg := g.emitExpressionToRegister(statement.Range.Start)
 		g.builder.Emit(OpcodeMove, loopVar, startReg)
 		g.allocator.FreeTemp(startReg)
 
 		// condition
-		endReg := g.emitExpressionToRegister(statement.Range[1])
+		endReg := g.emitExpressionToRegister(statement.Range.End)
 		condReg := g.allocator.AllocateTemp()
-		conditionAddress := g.builder.Emit(OpcodeLte, condReg, loopVar, endReg)
+		var conditionAddress int
+		if statement.Range.Inclusive {
+			conditionAddress = g.builder.Emit(OpcodeLte, condReg, loopVar, endReg)
+		} else {
+			conditionAddress = g.builder.Emit(OpcodeLt, condReg, loopVar, endReg)
+		}
 		falseBranch := g.builder.Emit(OpcodeJumpIf)
 		g.allocator.FreeTemp(condReg)
 

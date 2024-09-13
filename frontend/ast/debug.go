@@ -170,13 +170,15 @@ func (f ForRangeStatement) PrintTree(level int) {
 		fmt.Printf("Identifier: %s\n", f.Identifier.Value)
 	}
 
-	if len(f.Range) > 0 {
-		printIndent(level + 1)
-		fmt.Println("Range:")
-		for _, expr := range f.Range {
-			expr.PrintTree(level + 2)
-		}
+	printIndent(level + 1)
+	fmt.Print("Range ")
+	if f.Range.Inclusive {
+		fmt.Println("Inclusive")
+	} else {
+		fmt.Println("Exclusive")
 	}
+	f.Range.Start.PrintTree(level + 2)
+	f.Range.End.PrintTree(level + 2)
 
 	if f.Body != nil {
 		printIndent(level + 1)

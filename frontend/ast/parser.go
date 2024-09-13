@@ -77,16 +77,24 @@ func (p *Parser) parseStatement() Statement {
 
 		p.consume(chToken.IN)
 
-		start := p.parseExpression()
-		p.consume(chToken.DOT_DOT)
-		end := p.parseExpression()
+		rangeNode := &Range{Inclusive: false, Span: chToken.Span{Start: p.current.Position}}
+		rangeNode.Start = p.parseExpression()
+		p.expectOneOf(chToken.DOT_DOT, chToken.DOT_DOT_EQUAL)
+		operator := p.consume(p.current.Type)
+		if operator.Type == chToken.DOT_DOT_EQUAL {
+			rangeNode.Inclusive = true
+		}
+		rangeNode.Span.End = p.current.Position
+		fmt.Printf("Is range inclusive? %t\n", rangeNode.Inclusive)
+
+		rangeNode.End = p.parseExpression()
 
 		block := p.parseBlockStatement()
 
 		return &ForRangeStatement{
 			Span:       chToken.Span{Start: forToken.Position, End: p.current.Position},
 			Identifier: identifier,
-			Range:      [2]Expression{start, end},
+			Range:      rangeNode,
 			Body:       block,
 		}
 	case chToken.BREAK:

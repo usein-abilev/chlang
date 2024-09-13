@@ -54,6 +54,7 @@ const (
 	COMMA              // ,
 	DOT                // .
 	DOT_DOT            // ..
+	DOT_DOT_EQUAL      // ..=
 	ELLIPSIS           // ... (spread)
 	COLON              // :
 	SEMICOLON          // ;
@@ -150,7 +151,8 @@ var tokenSymbolNames = map[TokenType]string{
 	RIGHT_BRACKET:    "]",
 	COMMA:            ",",
 	DOT:              ".",
-	DOT_DOT:          "..",
+	DOT_DOT:          "..",  // exclusive range operator
+	DOT_DOT_EQUAL:    "..=", // inclusive range operator
 	ELLIPSIS:         "...",
 	COLON:            ":",
 	SEMICOLON:        ";",

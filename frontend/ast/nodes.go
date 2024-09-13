@@ -52,6 +52,12 @@ type (
 		Span  token.Span
 		Value string
 	}
+	Range struct {
+		Span      token.Span
+		Start     Expression
+		End       Expression
+		Inclusive bool
+	}
 	UnaryExpression struct {
 		Span     token.Span
 		Operator *token.Token
@@ -109,7 +115,7 @@ type (
 		Span       token.Span
 		Identifier *Identifier
 		Body       *BlockStatement
-		Range      [2]Expression
+		Range      *Range
 	}
 	BreakStatement struct {
 		Span token.Span
@@ -135,6 +141,7 @@ type (
 	}
 )
 
+func (Range) Node()                     {}
 func (Identifier) Node()                {}
 func (IntLiteral) Node()                {}
 func (BoolLiteral) Node()               {}

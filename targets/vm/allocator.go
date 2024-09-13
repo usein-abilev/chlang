@@ -91,7 +91,6 @@ func (r *RegisterAllocator) Allocate(variable string) RegisterAddress {
 		depth: r.scopeDepth,
 	}
 
-	fmt.Printf("Process allocate '%s', Register Table:\n%v\n", variable, r.table)
 	if len(r.freed) > 0 {
 		index := r.freed[len(r.freed)-1]
 		local.register = RegisterAddress(index)

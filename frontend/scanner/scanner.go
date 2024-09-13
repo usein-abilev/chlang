@@ -111,6 +111,10 @@ func (s *Scanner) Scan() token.Token {
 				s.next()
 				return s.produceToken(token.ELLIPSIS, "...")
 			}
+			if s.char == '=' {
+				s.next()
+				return s.produceToken(token.DOT_DOT_EQUAL, "..=")
+			}
 			return s.produceToken(token.DOT_DOT, "..")
 		}
 		return s.produceToken(token.DOT, ".")
