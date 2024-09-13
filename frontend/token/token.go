@@ -53,6 +53,7 @@ const (
 	RIGHT_BRACKET      // ]
 	COMMA              // ,
 	DOT                // .
+	DOT_DOT            // ..
 	ELLIPSIS           // ... (spread)
 	COLON              // :
 	SEMICOLON          // ;
@@ -66,6 +67,9 @@ const (
 	IF
 	ELSE
 	FOR
+	BREAK
+	CONTINUE
+	IN
 	TRUE
 	FALSE
 )
@@ -146,6 +150,8 @@ var tokenSymbolNames = map[TokenType]string{
 	RIGHT_BRACKET:    "]",
 	COMMA:            ",",
 	DOT:              ".",
+	DOT_DOT:          "..",
+	ELLIPSIS:         "...",
 	COLON:            ":",
 	SEMICOLON:        ";",
 
@@ -157,6 +163,9 @@ var tokenSymbolNames = map[TokenType]string{
 	IF:       "if",
 	ELSE:     "else",
 	FOR:      "for",
+	BREAK:    "break",
+	CONTINUE: "continue",
+	IN:       "in",
 	TRUE:     "true",
 	FALSE:    "false",
 }
@@ -255,16 +264,19 @@ func IsLogicalOperator(op TokenType) bool {
 
 // Maps keywords to their token type (used in the lexer to determinate whether an identifier is a keyword)
 var identTokens = map[string]TokenType{
-	"let":    VAR,
-	"const":  CONST,
-	"struct": STRUCT,
-	"fn":     FUNCTION,
-	"return": RETURN,
-	"if":     IF,
-	"else":   ELSE,
-	"for":    FOR,
-	"true":   TRUE,
-	"false":  FALSE,
+	"let":      VAR,
+	"const":    CONST,
+	"struct":   STRUCT,
+	"fn":       FUNCTION,
+	"return":   RETURN,
+	"if":       IF,
+	"break":    BREAK,
+	"continue": CONTINUE,
+	"in":       IN,
+	"else":     ELSE,
+	"for":      FOR,
+	"true":     TRUE,
+	"false":    FALSE,
 }
 
 func (t Token) String() string {

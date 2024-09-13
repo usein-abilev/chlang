@@ -161,6 +161,40 @@ func (p VarDeclarationStatement) PrintTree(level int) {
 	}
 }
 
+func (f ForRangeStatement) PrintTree(level int) {
+	printIndent(level)
+	fmt.Println("ForStatement")
+
+	if f.Identifier != nil {
+		printIndent(level + 1)
+		fmt.Printf("Identifier: %s\n", f.Identifier.Value)
+	}
+
+	if len(f.Range) > 0 {
+		printIndent(level + 1)
+		fmt.Println("Range:")
+		for _, expr := range f.Range {
+			expr.PrintTree(level + 2)
+		}
+	}
+
+	if f.Body != nil {
+		printIndent(level + 1)
+		fmt.Println("Body:")
+		f.Body.PrintTree(level + 2)
+	}
+}
+
+func (bs BreakStatement) PrintTree(level int) {
+	printIndent(level)
+	fmt.Println("BreakStatement")
+}
+
+func (cs ContinueStatement) PrintTree(level int) {
+	printIndent(level)
+	fmt.Println("ContinueStatement")
+}
+
 func (es ExpressionStatement) PrintTree(level int) {
 	printIndent(level)
 	fmt.Println("ExpressionStatement")

@@ -69,7 +69,38 @@ func (p *Parser) parseStatement() Statement {
 		}
 		return &ExpressionStatement{Expression: expr, Span: expr.Span}
 	case chToken.FOR:
-		log.Fatalf("For loop is not implemented yet")
+		// parsing for-range statement: for i in 1..10 { ... }
+		forToken := p.consume(chToken.FOR)
+
+		p.expect(chToken.IDENTIFIER)
+		identifier := p.parseIdentifier()
+
+		p.consume(chToken.IN)
+
+		start := p.parseExpression()
+		p.consume(chToken.DOT_DOT)
+		end := p.parseExpression()
+
+		block := p.parseBlockStatement()
+
+		return &ForRangeStatement{
+			Span:       chToken.Span{Start: forToken.Position, End: p.current.Position},
+			Identifier: identifier,
+			Range:      [2]Expression{start, end},
+			Body:       block,
+		}
+	case chToken.BREAK:
+		breakToken := p.consume(chToken.BREAK)
+		return &BreakStatement{Span: chToken.Span{
+			Start: breakToken.Position,
+			End:   p.current.Position,
+		}}
+	case chToken.CONTINUE:
+		continueToken := p.consume(chToken.CONTINUE)
+		return &ContinueStatement{Span: chToken.Span{
+			Start: continueToken.Position,
+			End:   p.current.Position,
+		}}
 	case chToken.RETURN:
 		p.consume(chToken.RETURN)
 		if p.functionScopeLevel == 0 {

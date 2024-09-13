@@ -37,7 +37,7 @@ func (r *RegisterAllocator) LeaveScope() {
 
 	// remove all variables in the current scope
 	table := *r.table
-	for idx := len(table) - 1; table[idx].depth == r.scopeDepth; idx-- {
+	for idx := len(table) - 1; idx >= 0 && table[idx].depth == r.scopeDepth; idx-- {
 		r.freed = append(r.freed, table[idx].register.AsInt())
 		table[idx].name = ""
 	}
@@ -58,7 +58,9 @@ func (r *RegisterAllocator) AllocateTemp() RegisterAddress {
 // FreeTemp frees the temporary register.
 func (r *RegisterAllocator) FreeTemp(address RegisterAddress) {
 	if r.IsTempRegister(address) {
-		r.Free(tempVariableName)
+		r.freed = append(r.freed, address.AsInt())
+		table := *r.table
+		table[address.AsInt()].name = ""
 	}
 }
 
@@ -89,10 +91,11 @@ func (r *RegisterAllocator) Allocate(variable string) RegisterAddress {
 		depth: r.scopeDepth,
 	}
 
+	fmt.Printf("Process allocate '%s', Register Table:\n%v\n", variable, r.table)
 	if len(r.freed) > 0 {
-		index := r.freed[0]
+		index := r.freed[len(r.freed)-1]
 		local.register = RegisterAddress(index)
-		r.freed = r.freed[1:]
+		r.freed = r.freed[:len(r.freed)-1]
 		(*r.table)[index] = *local
 	} else {
 		local.register = RegisterAddress(len(*r.table))

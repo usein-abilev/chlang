@@ -257,7 +257,7 @@ func (vm *VM) performBinaryOperation(opcode Opcode, register, x, y RegisterAddre
 			Value: result,
 		})
 	} else {
-		panic(fmt.Sprintf("vm: invalid operand type '%s'", operandX.Kind))
+		panic(fmt.Sprintf("vm: invalid operand type '%s', operand y = '%s', opcode '%s' (current instruction: %d)", operandX.Kind, operandY.Kind, opcode, vm.ip))
 	}
 }
 

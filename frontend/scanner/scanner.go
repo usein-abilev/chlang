@@ -103,12 +103,15 @@ func (s *Scanner) Scan() token.Token {
 	}
 
 	switch s.char {
-	case '.': // ., ...
+	case '.': // ., .., ...
 		s.next()
-		if s.char == '.' || s.peek() == '.' {
+		if s.char == '.' {
 			s.next()
-			s.next()
-			return s.produceToken(token.ELLIPSIS, "...")
+			if s.char == '.' {
+				s.next()
+				return s.produceToken(token.ELLIPSIS, "...")
+			}
+			return s.produceToken(token.DOT_DOT, "..")
 		}
 		return s.produceToken(token.DOT, ".")
 	case '!':
@@ -357,38 +360,37 @@ func (s *Scanner) scanNumber() token.Token {
 	dot := false
 	exp := false
 
-	if s.char == '.' && unicode.IsDigit(s.peek()) {
-		dot = true
-	}
-
-	s.scanNumberByCond(func(ch rune) bool {
-		if exp {
-			if ch == '+' || ch == '-' {
-				return true
+	for {
+		if s.char == '.' {
+			if s.peek() == '.' {
+				break
 			}
-			return unicode.IsDigit(ch)
-		}
-
-		if ch == '.' {
 			if dot {
 				s.fatal("Multiple dots in number")
-				return false
+				return s.produceToken(token.ILLEGAL, "")
 			}
 			dot = true
-			return true
-		}
-
-		if ch == 'e' || ch == 'E' {
+		} else if s.char == '_' {
+			if s.peek() == '_' {
+				s.fatal("Multiple underscores in number")
+				return s.produceToken(token.ILLEGAL, "")
+			}
+		} else if s.char == 'e' || s.char == 'E' {
 			if exp {
 				s.fatal("Multiple exponents in number")
-				return false
+				return s.produceToken(token.ILLEGAL, "")
+			}
+
+			next := s.peek()
+			if next == '+' || next == '-' {
+				s.next()
 			}
 			exp = true
-			return true
+		} else if !unicode.IsDigit(rune(s.char)) || s.char == endOfFile {
+			break
 		}
-
-		return unicode.IsDigit(rune(ch))
-	})
+		s.next()
+	}
 
 	literal := strings.ReplaceAll(s.input[start:s.offset], "_", "")
 	if dot || exp {

@@ -105,6 +105,18 @@ type (
 		Span       token.Span
 		Expression Expression
 	}
+	ForRangeStatement struct {
+		Span       token.Span
+		Identifier *Identifier
+		Body       *BlockStatement
+		Range      [2]Expression
+	}
+	BreakStatement struct {
+		Span token.Span
+	}
+	ContinueStatement struct {
+		Span token.Span
+	}
 	ConstDeclarationStatement struct {
 		Span           token.Span
 		ConstToken     *token.Token
@@ -136,6 +148,9 @@ func (BlockStatement) Node()            {}
 func (IfExpression) Node()              {}
 func (ExpressionStatement) Node()       {}
 func (ReturnStatement) Node()           {}
+func (ForRangeStatement) Node()         {}
+func (BreakStatement) Node()            {}
+func (ContinueStatement) Node()         {}
 func (VarDeclarationStatement) Node()   {}
 func (ConstDeclarationStatement) Node() {}
 func (FuncDeclarationStatement) Node()  {}
