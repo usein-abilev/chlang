@@ -75,6 +75,27 @@ func (c *Checker) visitStatement(statement ast.Statement) {
 		c.visitFuncBody(stmt)
 	case *ast.ExpressionStatement:
 		c.inferExpression(stmt.Expression)
+	case *ast.ForRangeStatement:
+		c.SymbolTable.OpenScope()
+
+		// insert range variable into the symbol table
+		rangeVar := &symbols.SymbolEntity{
+			Function:   nil,
+			Used:       false,
+			Name:       stmt.Identifier.Value,
+			Type:       symbols.SymbolTypeInt64,
+			EntityType: symbols.SymbolTypeVariable,
+			Position:   stmt.Span.Start,
+		}
+		c.SymbolTable.Insert(rangeVar)
+		stmt.Identifier.Symbol = rangeVar
+
+		// We don't need a new block scope, because the for-range statement is already a block statement
+		for _, statement := range stmt.Body.Statements {
+			c.visitStatement(statement)
+		}
+
+		c.SymbolTable.CloseScope()
 	case *ast.BlockStatement:
 		c.SymbolTable.OpenScope()
 		c.populateSymbolDeclarations(stmt.Statements)
@@ -142,7 +163,7 @@ func (c *Checker) visitConstDeclaration(stmt *ast.ConstDeclarationStatement) {
 		Position:   stmt.Span.Start,
 	}
 	c.SymbolTable.Insert(symbol)
-	stmt.SymbolMetadata = symbol
+	stmt.Symbol = symbol
 }
 
 func (c *Checker) visitVarDeclaration(stmt *ast.VarDeclarationStatement) {
@@ -188,7 +209,7 @@ func (c *Checker) visitVarDeclaration(stmt *ast.VarDeclarationStatement) {
 		Position:   stmt.Span.Start,
 	}
 	c.SymbolTable.Insert(symbol)
-	stmt.SymbolMetadata = symbol
+	stmt.Symbol = symbol
 }
 
 // Checks function signature and adds it into the symbol table
@@ -276,6 +297,8 @@ func (c *Checker) visitFuncSignature(decl *ast.FuncDeclarationStatement) {
 		// Arguments will populates into the symbol table in 'visitFuncDeclaration' function
 		funcSymbol.Function.Args = append(funcSymbol.Function.Args, argSymbol)
 	}
+
+	decl.Symbol = funcSymbol
 }
 
 // Checks function body for type matching
@@ -303,7 +326,7 @@ func (c *Checker) visitFuncBody(stmt *ast.FuncDeclarationStatement) {
 	c.SymbolTable.CloseScope()
 	c.function = prevFuncPtr
 
-	stmt.SymbolMetadata = funcSymbol
+	stmt.Symbol = funcSymbol
 }
 
 // Check expression type and return its internal type
@@ -323,6 +346,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 			return symbols.SymbolTypeInvalid
 		}
 		sym.Used = true
+		e.Symbol = sym
 		return sym.Type
 	case *ast.AssignExpression:
 		leftType := c.inferExpression(e.Left)
@@ -348,6 +372,8 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 		return symbols.SymbolTypeInvalid
 	case *ast.CallExpression:
 		sym := c.SymbolTable.Lookup(e.Function.Value)
+		e.Function.Symbol = sym
+
 		if sym == nil {
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message:  fmt.Sprintf("function '%s' not found", e.Function.Value),

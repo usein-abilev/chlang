@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/usein-abilev/chlang/frontend/ast"
+	"github.com/usein-abilev/chlang/frontend/ast/symbols"
 	"github.com/usein-abilev/chlang/frontend/token"
 )
 
@@ -31,8 +32,8 @@ type RVMGenerator struct {
 func NewRVMGenerator(program *ast.Program) *RVMGenerator {
 	moduleFunction := &FunctionObject{
 		name:         "<module>",
-		instructions: make([]VMInstruction, 0),
 		contextType:  ModuleContext,
+		instructions: make([]VMInstruction, 0),
 		registers:    make([]LocalRegister, 0),
 		constants:    make(map[string]OperandValue),
 	}
@@ -246,7 +247,12 @@ func (g *RVMGenerator) emitExpressionToRegister(expression ast.Expression) Regis
 			}
 			registers = append(registers, register)
 		}
-		g.builder.Emit(OpcodeCall, calleeReg, len(expr.Args), 1) // TODO: determine the number of return values
+
+		returns := 0
+		if expr.Function.Symbol.Function.ReturnType != symbols.SymbolTypeVoid {
+			returns = 1
+		}
+		g.builder.Emit(OpcodeCall, calleeReg, len(expr.Args), returns)
 
 		for idx := len(registers) - 1; idx >= 0; idx-- {
 			register := registers[idx]

@@ -196,7 +196,6 @@ func (p *Parser) parseFunStatement() *FuncDeclarationStatement {
 	}
 	body := p.parseBlockStatement()
 	return &FuncDeclarationStatement{
-		FunToken:   funToken,
 		Name:       identifier,
 		Params:     params,
 		Body:       body,

@@ -11,8 +11,7 @@ func main() {
 	program := frontend.Build("./examples/astdebug/basic.chl")
 	codegen := vm.NewRVMGenerator(program)
 	module := codegen.Generate()
-	fmt.Printf("Generated module: %+v\n", module)
-	machine := vm.NewVM(module)
+	machine := vm.NewVM(module, &vm.VMOptions{Debug: false})
+	fmt.Printf("\n======== Program output ========\n\n")
 	machine.Run()
-	machine.Print()
 }

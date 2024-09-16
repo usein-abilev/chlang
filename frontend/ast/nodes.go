@@ -31,9 +31,10 @@ type (
 
 type (
 	Identifier struct {
-		Span  token.Span
-		Token *token.Token
-		Value string
+		Span   token.Span
+		Value  string
+		Token  *token.Token
+		Symbol *symbols.SymbolEntity
 	}
 	BoolLiteral struct {
 		Span  token.Span
@@ -91,13 +92,12 @@ type (
 		Expression Expression
 	}
 	FuncDeclarationStatement struct {
-		Span           token.Span
-		FunToken       *token.Token
-		Name           *Identifier
-		Params         []*FuncArgument
-		Body           *BlockStatement
-		ReturnType     *Identifier
-		SymbolMetadata *symbols.SymbolEntity
+		Span       token.Span
+		Name       *Identifier
+		Params     []*FuncArgument
+		Body       *BlockStatement
+		ReturnType *Identifier
+		Symbol     *symbols.SymbolEntity
 	}
 	FuncArgument struct {
 		Name *Identifier
@@ -124,20 +124,20 @@ type (
 		Span token.Span
 	}
 	ConstDeclarationStatement struct {
-		Span           token.Span
-		ConstToken     *token.Token
-		Name           *Identifier
-		Type           *Identifier
-		Value          Expression
-		SymbolMetadata *symbols.SymbolEntity
+		Span       token.Span
+		ConstToken *token.Token
+		Name       *Identifier
+		Type       *Identifier
+		Value      Expression
+		Symbol     *symbols.SymbolEntity
 	}
 	VarDeclarationStatement struct {
-		Span           token.Span
-		LetToken       *token.Token
-		Name           *Identifier
-		Type           *Identifier
-		Value          Expression
-		SymbolMetadata *symbols.SymbolEntity
+		Span     token.Span
+		LetToken *token.Token
+		Name     *Identifier
+		Type     *Identifier
+		Value    Expression
+		Symbol   *symbols.SymbolEntity
 	}
 )
 
