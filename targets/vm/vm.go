@@ -120,15 +120,9 @@ main_loop:
 			})
 		case OpcodeLoadConst:
 			target := operands[0].(RegisterAddress)
-			value := operands[1].(string)
-			constant := vm.callRecord.function.lookupConstant(value)
-			if constant == nil {
-				panic(fmt.Sprintf("vm: unresolved symbol '%s'", value))
-			}
-			vm.setStackValue(base+target, &OperandValue{
-				Kind:  constant.Kind,
-				Value: constant.Value,
-			})
+			value := operands[1].(ConstantValueIdx)
+			constant := vm.callRecord.function.constants[value]
+			vm.setStackValue(base+target, constant.Value)
 		case OpcodeLoadString:
 			target := operands[0].(RegisterAddress)
 			value := operands[1].(string)
@@ -137,7 +131,7 @@ main_loop:
 				Value: value,
 			})
 		case OpcodeAdd, OpcodeSub, OpcodeMul, OpcodeDiv, OpcodeBitwiseAnd, OpcodeBitwiseOr,
-			OpcodeEq, OpcodeGt, OpcodeGte, OpcodeLt, OpcodeLte:
+			OpcodeEq, OpcodeGt, OpcodeGte, OpcodeLt, OpcodeLte, OpcodeNeq:
 			target := operands[0].(RegisterAddress)
 			operand1 := operands[1].(RegisterAddress)
 			operand2 := operands[2].(RegisterAddress)
@@ -151,12 +145,12 @@ main_loop:
 				Value: sourceSlot.Value,
 			})
 		case OpcodeJump:
-			address := operands[0].(RegisterAddress)
+			address := operands[0].(int)
 			vm.ip = uint32(address)
 		case OpcodeJumpIf:
 			value := operands[0].(RegisterAddress)
 			condition := operands[1].(bool)
-			address := operands[2].(RegisterAddress)
+			address := operands[2].(int)
 			if vm.stack[base+value].Value == condition {
 				vm.ip = uint32(address)
 			}
@@ -191,7 +185,7 @@ func (vm *VM) performBinaryOperation(opcode Opcode, register, x, y RegisterAddre
 	operandX := vm.stack[x]
 	operandY := vm.stack[y]
 
-	if opcode == OpcodeEq || opcode == OpcodeGt || opcode == OpcodeGte || opcode == OpcodeLt || opcode == OpcodeLte {
+	if opcode.IsComparison() {
 		if operandX.Kind != operandY.Kind {
 			panic(fmt.Sprintf("vm: invalid operand type '%s' and '%s'", operandX.Kind, operandY.Kind))
 		}
@@ -207,6 +201,8 @@ func (vm *VM) performBinaryOperation(opcode Opcode, register, x, y RegisterAddre
 			result = operandX.Value.(int64) < operandY.Value.(int64)
 		case OpcodeLte:
 			result = operandX.Value.(int64) <= operandY.Value.(int64)
+		case OpcodeNeq:
+			result = operandX.Value != operandY.Value
 		}
 
 		vm.setStackValue(register, &OperandValue{
@@ -289,11 +285,16 @@ func (vm *VM) callFunc(function RegisterAddress, args int, results int) {
 	functionBasePointer := parentFrame.base + function + 1 // base starts at the first argument if exists (addressReg + 1)
 	functionObj := vm.stack[parentFrame.base+function]
 	if functionObj.Kind == OperandTypeBuildInFunction {
+		builtinFunction, ok := BuildInFunctions[functionObj.Value.(string)]
+		if !ok {
+			panic(fmt.Sprintf("Invalid build-in function '%s'", functionObj.Value))
+		}
 		var operands []*OperandValue
 		for i := 0; i < args; i++ {
 			operands = append(operands, &vm.stack[functionBasePointer+RegisterAddress(i)])
 		}
-		functionObj.Value.(func(operands []*OperandValue))(operands)
+		builtinFunction(operands)
+		vm.setStackNullValue(uint64(functionBasePointer) - 1)
 		return
 	} else if functionObj.Kind != OperandTypeFunctionObject {
 		panic(fmt.Sprintf("Invalid function object to perform call! %T", functionObj))

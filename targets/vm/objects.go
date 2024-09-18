@@ -55,12 +55,11 @@ func (ovt OperandValueType) String() string {
 	return "undefined"
 }
 
-type ContextType uint8
-
-const (
-	FunctionContext = iota
-	ModuleContext
-)
+type ConstantValueIdx int
+type ConstantValue struct {
+	Name  string
+	Value *OperandValue
+}
 
 type RegisterAddress int
 
@@ -70,20 +69,8 @@ func (r RegisterAddress) AsInt() int {
 
 // Represents an allocated local variable register in the VM stack.
 type LocalRegister struct {
-	name     string
-	depth    int
-	register RegisterAddress
-}
-
-type RegisterTable []LocalRegister
-
-// FunctionObject represents a function or module context in the VM.
-// It contains the function's instructions, type of context, constants, registers, and parent context.
-type FunctionObject struct {
-	name         string
-	constants    map[string]OperandValue
-	instructions []VMInstruction
-	registers    RegisterTable
-	contextType  ContextType
-	parent       *FunctionObject
+	name    string
+	address RegisterAddress
+	depth   int
+	temp    bool
 }

@@ -46,6 +46,9 @@ const (
 	// Performs equality check
 	OpcodeEq // R(x) = R(y) == R(z)
 
+	// Performs inequality check
+	OpcodeNeq // R(x) = R(y) != R(z)
+
 	// Performs greater than operation
 	OpcodeGt // R(x) = R(y) > R(z)
 
@@ -93,6 +96,7 @@ var opcodeNames = map[Opcode]string{
 	OpcodeEq:         "Eq",
 	OpcodeGt:         "Gt",
 	OpcodeGte:        "Gte",
+	OpcodeNeq:        "Neq",
 	OpcodeLt:         "Lt",
 	OpcodeLte:        "Lte",
 	OpcodeNot:        "Not",
@@ -106,4 +110,8 @@ var opcodeNames = map[Opcode]string{
 
 func (op Opcode) String() string {
 	return opcodeNames[op]
+}
+
+func (op Opcode) IsComparison() bool {
+	return op == OpcodeEq || op == OpcodeNeq || op == OpcodeGt || op == OpcodeGte || op == OpcodeLt || op == OpcodeLte
 }
