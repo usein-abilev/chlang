@@ -113,7 +113,6 @@ func (g *RVMGenerator) emitStatement(statement ast.Statement) {
 		g.function.emit(OpcodeAdd, loopVar, loopVar, oneReg)
 		g.function.emit(OpcodeJump, conditionAddress)
 
-		fmt.Printf("unused: %v %v", incrementAddr, falseBranch)
 		for _, instruction := range g.forContext.conditionBranches {
 			g.function.PatchInstruction(instruction, incrementAddr)
 		}
