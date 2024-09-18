@@ -10,11 +10,11 @@ The register-based code can be used as an intermediate representation to generat
 ## Planned features:
 - [x] Variable, constant and function declarations
 - [x] Type checking and inference
-- [ ] Function calls
-- [ ] Control structures (if, while, for)
+- [x] Function calls
+- [x] Control structures (if, while, for)
 - [ ] Modules and packages
 - [ ] Data structures (arrays, vectors, user-defined structures)
-- [ ] Interpreter for register-based virtual machine
+- [x] Interpreter for register-based virtual machine
 
 ## Example
 ```rust
