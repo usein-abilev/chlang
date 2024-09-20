@@ -3,6 +3,7 @@ package vm
 
 import (
 	"fmt"
+	"math"
 )
 
 const (
@@ -130,8 +131,36 @@ main_loop:
 				Kind:  OperandTypeString,
 				Value: value,
 			})
-		case OpcodeAdd, OpcodeSub, OpcodeMul, OpcodeDiv, OpcodeBitwiseAnd, OpcodeBitwiseOr,
-			OpcodeEq, OpcodeGt, OpcodeGte, OpcodeLt, OpcodeLte, OpcodeNeq:
+		case OpcodeNot:
+			target := operands[0].(RegisterAddress)
+			operand := operands[1].(RegisterAddress)
+			vm.setStackValue(base+target, &OperandValue{
+				Kind:  OperandTypeBool,
+				Value: !vm.stack[base+operand].Value.(bool),
+			})
+		case OpcodeNeg:
+			target := operands[0].(RegisterAddress)
+			operand := operands[1].(RegisterAddress)
+			stackValue := vm.stack[base+operand]
+			if !stackValue.Kind.IsNumeric() {
+				panic(fmt.Sprintf("vm: invalid operand type '%s' for negation", vm.stack[base+operand].Kind))
+			}
+			switch stackValue.Kind {
+			case OperandTypeInt8, OperandTypeInt16, OperandTypeInt32, OperandTypeInt64:
+				vm.setStackValue(base+target, &OperandValue{
+					Kind:  OperandTypeInt64,
+					Value: -stackValue.Value.(int64),
+				})
+			case OperandTypeFloat32, OperandTypeFloat64:
+				vm.setStackValue(base+target, &OperandValue{
+					Kind:  OperandTypeFloat64,
+					Value: -stackValue.Value.(float64),
+				})
+			}
+		case OpcodeAdd, OpcodeSub, OpcodeMul, OpcodeDiv,
+			OpcodeEq, OpcodeGt, OpcodeGte, OpcodeLt, OpcodeLte, OpcodeNeq,
+			OpcodeXor, OpcodeAnd, OpcodeOr, OpcodeShl, OpcodeShr,
+			OpcodeMod, OpcodePow:
 			target := operands[0].(RegisterAddress)
 			operand1 := operands[1].(RegisterAddress)
 			operand2 := operands[2].(RegisterAddress)
@@ -189,20 +218,47 @@ func (vm *VM) performBinaryOperation(opcode Opcode, register, x, y RegisterAddre
 		if operandX.Kind != operandY.Kind {
 			panic(fmt.Sprintf("vm: invalid operand type '%s' and '%s'", operandX.Kind, operandY.Kind))
 		}
+
 		var result bool
-		switch opcode {
-		case OpcodeEq:
-			result = operandX.Value == operandY.Value
-		case OpcodeGt:
-			result = operandX.Value.(int64) > operandY.Value.(int64)
-		case OpcodeGte:
-			result = operandX.Value.(int64) >= operandY.Value.(int64)
-		case OpcodeLt:
-			result = operandX.Value.(int64) < operandY.Value.(int64)
-		case OpcodeLte:
-			result = operandX.Value.(int64) <= operandY.Value.(int64)
-		case OpcodeNeq:
-			result = operandX.Value != operandY.Value
+
+		switch x := operandX.Value.(type) {
+		case int64:
+			y := operandY.Value.(int64)
+
+			switch opcode {
+			case OpcodeEq:
+				result = x == y
+			case OpcodeGt:
+				result = x > y
+			case OpcodeGte:
+				result = x >= y
+			case OpcodeLt:
+				result = x < y
+			case OpcodeLte:
+				result = x <= y
+			case OpcodeNeq:
+				result = x != y
+			}
+		case float64:
+			y := operandY.Value.(float64)
+
+			switch opcode {
+			case OpcodeEq:
+				result = x == y
+			case OpcodeGt:
+				result = x > y
+			case OpcodeGte:
+				result = x >= y
+			case OpcodeLt:
+				result = x < y
+			case OpcodeLte:
+				result = x <= y
+			case OpcodeNeq:
+				result = x != y
+			}
+
+		default:
+			panic(fmt.Sprintf("vm: unsupported operand type '%T'", operandX.Value))
 		}
 
 		vm.setStackValue(register, &OperandValue{
@@ -213,25 +269,88 @@ func (vm *VM) performBinaryOperation(opcode Opcode, register, x, y RegisterAddre
 	}
 
 	if operandX.Kind.IsNumeric() {
-		var result, valueX, valueY int64
-		valueX = operandX.Value.(int64)
-		valueY = operandY.Value.(int64)
+		var result interface{}
 
-		switch opcode {
-		case OpcodeAdd:
-			result = valueX + valueY
-		case OpcodeSub:
-			result = valueX - valueY
-		case OpcodeMul:
-			result = valueX * valueY
-		case OpcodeDiv:
-			result = valueX / valueY
+		switch x := operandX.Value.(type) {
+		case int64:
+			var y int64
+			if _, ok := operandY.Value.(int64); !ok {
+				y = int64(operandY.Value.(float64))
+			} else {
+				y = operandY.Value.(int64)
+			}
+
+			switch opcode {
+			case OpcodeAdd:
+				result = x + y
+			case OpcodeSub:
+				result = x - y
+			case OpcodeMul:
+				result = x * y
+			case OpcodeDiv:
+				if y == 0 {
+					panic("vm: division by zero")
+				}
+				result = x / y
+			case OpcodePow:
+				result = int64(math.Pow(float64(x), float64(y)))
+			case OpcodeMod:
+				result = x % y
+			case OpcodeShl:
+				result = x << y
+			case OpcodeShr:
+				result = x >> y
+			case OpcodeAnd:
+				result = x & y
+			case OpcodeOr:
+				result = x | y
+			case OpcodeXor:
+				result = x ^ y
+			default:
+				panic(fmt.Sprintf("vm: unknown binary opcode '%s'", opcode))
+			}
+
+		case float64:
+			var y float64
+			if _, ok := operandY.Value.(float64); !ok {
+				y = float64(operandY.Value.(int64))
+			} else {
+				y = operandY.Value.(float64)
+			}
+
+			switch opcode {
+			case OpcodeAdd:
+				result = x + y
+			case OpcodeSub:
+				result = x - y
+			case OpcodeMul:
+				result = x * y
+			case OpcodeDiv:
+				if y == 0.0 {
+					panic("vm: division by zero")
+				}
+				result = x / y
+			case OpcodePow:
+				result = math.Pow(x, y)
+			default:
+				panic(fmt.Sprintf("vm: unsupported float64 operation for '%s'", opcode))
+			}
+
 		default:
-			panic(fmt.Sprintf("vm: unknown binary opcode '%s'", opcode))
+			panic(fmt.Sprintf("vm: unsupported operand type '%T'", operandX.Value))
+		}
+
+		// Set the appropriate type based on the result
+		var kind OperandValueType
+		switch result.(type) {
+		case int64:
+			kind = OperandTypeInt64
+		case float64:
+			kind = OperandTypeFloat64
 		}
 
 		vm.setStackValue(register, &OperandValue{
-			Kind:  OperandTypeInt64,
+			Kind:  kind,
 			Value: result,
 		})
 	} else if operandX.Kind == OperandTypeBool {
@@ -240,9 +359,9 @@ func (vm *VM) performBinaryOperation(opcode Opcode, register, x, y RegisterAddre
 		valueY = operandY.Value.(bool)
 
 		switch opcode {
-		case OpcodeBitwiseAnd:
+		case OpcodeAnd:
 			result = valueX && valueY
-		case OpcodeBitwiseOr:
+		case OpcodeOr:
 			result = valueX || valueY
 		default:
 			panic(fmt.Sprintf("vm: unknown binary opcode '%s'", opcode))
@@ -297,7 +416,7 @@ func (vm *VM) callFunc(function RegisterAddress, args int, results int) {
 		vm.setStackNullValue(uint64(functionBasePointer) - 1)
 		return
 	} else if functionObj.Kind != OperandTypeFunctionObject {
-		panic(fmt.Sprintf("Invalid function object to perform call! %T", functionObj))
+		panic(fmt.Sprintf("Invalid function object to perform call: %T (ip=%d, caller=%s)", functionObj, vm.ip-1, vm.callRecord.function.name))
 	}
 	vm.callRecord = &CallFrame{
 		args:          uint64(args),

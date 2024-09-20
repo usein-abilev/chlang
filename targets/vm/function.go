@@ -71,9 +71,8 @@ func (fn *FunctionObject) enterScope() {
 }
 
 func (fn *FunctionObject) leaveScope() {
-	fn.scopeDepth--
-
 	if len(fn.locals) == 0 {
+		fn.scopeDepth--
 		return
 	}
 
@@ -85,6 +84,7 @@ func (fn *FunctionObject) leaveScope() {
 		}
 	}
 	fn.locals = fn.locals[:idx+1]
+	fn.scopeDepth--
 }
 
 func (fn *FunctionObject) bindLocal(register RegisterAddress, name string) bool {
@@ -112,11 +112,13 @@ func (fn *FunctionObject) addTemp() RegisterAddress {
 }
 
 func (fn *FunctionObject) freeAllTempRegister() {
-	for i := len(fn.locals) - 1; i >= 0; i-- {
-		if fn.locals[i].temp {
-			fn.locals = fn.locals[:i]
+	idx := len(fn.locals) - 1
+	for ; idx >= 0; idx-- {
+		if !fn.locals[idx].temp {
+			break
 		}
 	}
+	fn.locals = fn.locals[:idx+1]
 }
 func (fn *FunctionObject) popTempRegister() *LocalRegister {
 	if len(fn.locals) == 0 {
@@ -185,11 +187,18 @@ func (fn *FunctionObject) Print() {
 		fmt.Printf("%s%s(%s)\n", left, strings.Repeat(" ", offset), constant.Name)
 	}
 
+	fn.printLocals()
+	fn.printInstructions()
+}
+
+func (fn *FunctionObject) printLocals() {
 	fmt.Printf("Registers (%d):\n", len(fn.locals))
 	for i, local := range fn.locals {
 		fmt.Printf("\t%v: %s (temp=%v, scope=%d)\n", i, local.name, local.temp, local.depth)
 	}
+}
 
+func (fn *FunctionObject) printInstructions() {
 	fmt.Printf("Instructions (%d): \n", len(fn.instructions))
 	opcodeWidth := 10
 	operandWidth := 3

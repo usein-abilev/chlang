@@ -8,7 +8,7 @@ import (
 	"github.com/usein-abilev/chlang/frontend/ast"
 	"github.com/usein-abilev/chlang/frontend/ast/symbols"
 	"github.com/usein-abilev/chlang/frontend/errors"
-	"github.com/usein-abilev/chlang/frontend/token"
+	chToken "github.com/usein-abilev/chlang/frontend/token"
 )
 
 type Checker struct {
@@ -23,6 +23,7 @@ type Checker struct {
 
 // Check performs semantic analysis on the AST
 // It populates the symbol table and checks for type mismatches
+// It also will transform the AST into a more optimized form
 func Check(program *ast.Program) *Checker {
 	c := &Checker{
 		SymbolTable: symbols.NewSymbolTable(),
@@ -351,23 +352,39 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 	case *ast.AssignExpression:
 		leftType := c.inferExpression(e.Left)
 		rightType := c.inferExpression(e.Right)
+
 		if leftType == symbols.SymbolTypeInvalid || rightType == symbols.SymbolTypeInvalid {
 			return symbols.SymbolTypeInvalid
 		}
-		switch e.Operator.Type {
-		case token.ASSIGN:
-			if !c.isCompatibleType(leftType, rightType) {
+
+		if chToken.IsAssignment(e.Operator.Type) {
+			if _, ok := e.Left.(*ast.Identifier); !ok {
 				c.Errors = append(c.Errors, &errors.SemanticError{
-					Message:  "incompatible type of an assign expression",
+					Message:  "left side of an assignment must be an identifier",
 					Position: e.Span.Start,
 				})
 				return symbols.SymbolTypeInvalid
 			}
-			return rightType
+			if leftType != rightType {
+				c.Errors = append(c.Errors, &errors.SemanticError{
+					Message: fmt.Sprintf(
+						"incompatible type of an assign expression '%s' (left: %s, right: %s)",
+						e.Operator.Literal,
+						leftType,
+						rightType,
+					),
+					Span:     e.Span,
+					Position: e.Span.Start,
+				})
+				return symbols.SymbolTypeInvalid
+			}
+			return leftType
 		}
 
 		c.Errors = append(c.Errors, &errors.SemanticError{
-			Message: fmt.Sprintf("type infer: unknown expression type: %T", expr),
+			Message:  fmt.Sprintf("type infer: unknown assign operator type: %s", e.Operator.Literal),
+			Span:     e.Span,
+			Position: e.Operator.Position,
 		})
 		return symbols.SymbolTypeInvalid
 	case *ast.CallExpression:
@@ -436,7 +453,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 			return symbols.SymbolTypeInvalid
 		}
 		switch e.Operator.Type {
-		case token.MINUS, token.PLUS:
+		case chToken.MINUS, chToken.PLUS:
 			if !rightType.IsNumeric() {
 				c.Errors = append(c.Errors, &errors.SemanticError{
 					Message:  fmt.Sprintf("unary operator '%s' requires only numeric operand", e.Operator.Literal),
@@ -445,7 +462,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 				return symbols.SymbolTypeInvalid
 			}
 			return rightType
-		case token.BANG:
+		case chToken.BANG:
 			if rightType != symbols.SymbolTypeBool {
 				c.Errors = append(c.Errors, &errors.SemanticError{
 					Message:  fmt.Sprintf("unary operator '%s' requires only boolean operand", e.Operator.Literal),
@@ -573,9 +590,19 @@ func (c *Checker) isCompatibleType(a, b symbols.SymbolValueType) bool {
 	return a == b // TODO: Right now, we just strictly comparing two internal types
 }
 
-func (c *Checker) checkTypeMismatch(a, b symbols.SymbolValueType, operator *token.Token) (symbols.SymbolValueType, error) {
+func (c *Checker) checkTypeMismatch(a, b symbols.SymbolValueType, operator *chToken.Token) (symbols.SymbolValueType, error) {
 	switch operator.Type {
-	case token.PLUS, token.MINUS, token.ASTERISK, token.SLASH, token.EXPONENT:
+	case chToken.PLUS,
+		chToken.MINUS,
+		chToken.ASTERISK,
+		chToken.EXPONENT,
+		chToken.PERCENT,
+		chToken.SLASH,
+		chToken.AMPERSAND,
+		chToken.PIPE,
+		chToken.CARET,
+		chToken.LEFT_SHIFT,
+		chToken.RIGHT_SHIFT:
 		if a == b {
 			return a, nil
 		}
@@ -587,8 +614,8 @@ func (c *Checker) checkTypeMismatch(a, b symbols.SymbolValueType, operator *toke
 			}
 		}
 		return a, nil
-	case token.EQUALS, token.NOT_EQUALS, token.LESS,
-		token.LESS_EQUALS, token.GREATER, token.GREATER_EQUALS, token.AND, token.OR:
+	case chToken.EQUALS, chToken.NOT_EQUALS, chToken.LESS,
+		chToken.LESS_EQUALS, chToken.GREATER, chToken.GREATER_EQUALS, chToken.AND, chToken.OR:
 		if a == b {
 			return symbols.SymbolTypeBool, nil
 		}

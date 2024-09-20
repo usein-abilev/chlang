@@ -85,7 +85,6 @@ func (p *Parser) parseStatement() Statement {
 			rangeNode.Inclusive = true
 		}
 		rangeNode.Span.End = p.current.Position
-		fmt.Printf("Is range inclusive? %t\n", rangeNode.Inclusive)
 
 		rangeNode.End = p.parseExpression()
 
@@ -148,7 +147,6 @@ func (p *Parser) parseStatement() Statement {
 		}
 		return &ExpressionStatement{Expression: expr}
 	}
-	return nil
 }
 
 func (p *Parser) parseIfExpression() *IfExpression {
@@ -344,8 +342,8 @@ func (p *Parser) parseBinaryExpression(min int) Expression {
 	left := p.parsePrimary()
 
 	// parse assignment expression
-	if p.current.Type == chToken.ASSIGN {
-		op := p.consume(chToken.ASSIGN)
+	if chToken.IsAssignment(p.current.Type) {
+		op := p.consume(p.current.Type)
 		right := p.parseBinaryExpression(min)
 		return &AssignExpression{Left: left, Operator: op, Right: right, Span: chToken.Span{
 			Start: spanStart,

@@ -29,6 +29,43 @@ type RVMGenerator struct {
 	lastBlockExpressionRegister RegisterAddress
 }
 
+var mappedBinaryOperatorsToOpcodes = map[token.TokenType]Opcode{
+	token.PLUS:           OpcodeAdd,
+	token.MINUS:          OpcodeSub,
+	token.ASTERISK:       OpcodeMul,
+	token.EXPONENT:       OpcodePow,
+	token.PERCENT:        OpcodeMod,
+	token.SLASH:          OpcodeDiv,
+	token.EQUALS:         OpcodeEq,
+	token.GREATER:        OpcodeGt,
+	token.GREATER_EQUALS: OpcodeGte,
+	token.LESS:           OpcodeLt,
+	token.LESS_EQUALS:    OpcodeLte,
+	token.NOT_EQUALS:     OpcodeNeq,
+	token.AND:            OpcodeAnd,
+	token.AMPERSAND:      OpcodeAnd,
+	token.OR:             OpcodeOr,
+	token.PIPE:           OpcodeOr,
+	token.CARET:          OpcodeXor,
+	token.LEFT_SHIFT:     OpcodeShl,
+	token.RIGHT_SHIFT:    OpcodeShr,
+}
+
+var mappedAssignOperatorsToOpcodes = map[token.TokenType]Opcode{
+	token.ASSIGN:             OpcodeMove,
+	token.PLUS_ASSIGN:        OpcodeAdd,
+	token.MINUS_ASSIGN:       OpcodeSub,
+	token.SLASH_ASSIGN:       OpcodeDiv,
+	token.EXPONENT_ASSIGN:    OpcodePow,
+	token.ASTERISK_ASSIGN:    OpcodeMul,
+	token.PERCENT_ASSIGN:     OpcodeMod,
+	token.AMPERSAND_ASSIGN:   OpcodeAnd,
+	token.PIPE_ASSIGN:        OpcodeOr,
+	token.CARET_ASSIGN:       OpcodeXor,
+	token.LEFT_SHIFT_ASSIGN:  OpcodeShl,
+	token.RIGHT_SHIFT_ASSIGN: OpcodeShr,
+}
+
 func NewRVMGenerator(program *ast.Program) *RVMGenerator {
 	moduleFunction := &FunctionObject{
 		name:         "<module>",
@@ -235,12 +272,15 @@ func (g *RVMGenerator) emitExpression(expression ast.Expression) RegisterAddress
 		return resultRegister
 	case *ast.UnaryExpression:
 		targetReg := g.function.addTemp()
-		operandReg := g.emitExpressionAligned(expr.Right)
+		operandReg := g.emitExpression(expr.Right)
 		switch expr.Operator.Type {
 		case token.BANG:
 			g.function.emit(OpcodeNot, targetReg, operandReg)
+		case token.MINUS:
+			g.function.emit(OpcodeNeg, targetReg, operandReg)
+		case token.PLUS:
 		default:
-			panic(fmt.Sprintf("error: unknown unary operator '%s'", expr.Operator.Literal))
+			panic(fmt.Sprintf("error: unknown unary operator '%s': %s", expr.Operator.Literal, expr.Span))
 		}
 		return targetReg
 	case *ast.CallExpression:
@@ -254,8 +294,9 @@ func (g *RVMGenerator) emitExpression(expression ast.Expression) RegisterAddress
 
 		for _, argumentExpr := range expr.Args {
 			register := g.emitExpression(argumentExpr)
-			if len(g.function.locals)-1 < int(register) || !g.function.locals[register].temp {
+			if int(register) < len(g.function.locals) && !g.function.locals[register].temp {
 				tempRegister := g.function.addTemp()
+				fmt.Printf("emit temporary register? %d\n", register)
 				g.function.emit(OpcodeMove, tempRegister, register)
 			}
 		}
@@ -272,14 +313,18 @@ func (g *RVMGenerator) emitExpression(expression ast.Expression) RegisterAddress
 
 		return calleeReg
 	case *ast.AssignExpression:
-		targetReg := g.emitExpression(expr.Left)
-		switch expr.Operator.Type {
-		case token.ASSIGN:
-			leftReg := g.emitExpression(expr.Right)
-			g.function.emit(OpcodeMove, targetReg, leftReg)
-			g.function.popTempRegister()
+		leftReg := g.emitExpression(expr.Left)
+		if opcode, ok := mappedAssignOperatorsToOpcodes[expr.Operator.Type]; ok {
+			if expr.Operator.Type == token.ASSIGN {
+				rightReg := g.emitExpression(expr.Right)
+				g.function.emit(OpcodeMove, leftReg, rightReg)
+				return leftReg
+			}
+			rightReg := g.emitExpression(expr.Right)
+			g.function.emit(opcode, leftReg, leftReg, rightReg)
 			return leftReg
 		}
+
 		panic(fmt.Sprintf("unknown assign expression operator '%s'", expr.Operator.Literal))
 	case *ast.BinaryExpression:
 		targetReg := g.function.addTemp()
@@ -289,45 +334,19 @@ func (g *RVMGenerator) emitExpression(expression ast.Expression) RegisterAddress
 
 		g.function.popTempRegister() // pop last register
 
-		switch expr.Operator.Type {
-		case token.PLUS:
-			g.function.emit(OpcodeAdd, targetReg, leftReg, rightReg)
-		case token.MINUS:
-			g.function.emit(OpcodeSub, targetReg, leftReg, rightReg)
-		case token.ASTERISK:
-			g.function.emit(OpcodeMul, targetReg, leftReg, rightReg)
-		case token.SLASH:
-			g.function.emit(OpcodeDiv, targetReg, leftReg, rightReg)
-		case token.EQUALS:
-			g.function.emit(OpcodeEq, targetReg, leftReg, rightReg)
-		case token.GREATER:
-			g.function.emit(OpcodeGt, targetReg, leftReg, rightReg)
-		case token.GREATER_EQUALS:
-			g.function.emit(OpcodeGte, targetReg, leftReg, rightReg)
-		case token.LESS:
-			g.function.emit(OpcodeLt, targetReg, leftReg, rightReg)
-		case token.LESS_EQUALS:
-			g.function.emit(OpcodeLte, targetReg, leftReg, rightReg)
-		case token.NOT_EQUALS:
-			g.function.emit(OpcodeNeq, targetReg, leftReg, rightReg)
-		case token.AND:
-			g.function.emit(OpcodeBitwiseAnd, targetReg, leftReg, rightReg)
-		case token.OR:
-			g.function.emit(OpcodeBitwiseOr, targetReg, leftReg, rightReg)
-		default:
-			panic(fmt.Sprintf("error: unknown operator '%s'", expr.Operator.Literal))
+		if opcode, ok := mappedBinaryOperatorsToOpcodes[expr.Operator.Type]; ok {
+			g.function.emit(opcode, targetReg, leftReg, rightReg)
+			return targetReg
 		}
 
-		return targetReg
+		panic(fmt.Sprintf("error: unknown operator '%s'", expr.Operator.Literal))
 	case *ast.IntLiteral:
-		integer, _ := strconv.ParseInt(expr.Value, 0, 64)
 		targetReg := g.function.addTemp()
-		g.function.emit(OpcodeLoadConst, targetReg, g.function.emitConstantValue(
-			&OperandValue{
-				Kind:  OperandTypeInt64,
-				Value: integer,
-			}),
-		)
+		g.function.emit(OpcodeLoadConst, targetReg, g.function.emitConstantValue(getOperandValueFromConstant(expr)))
+		return targetReg
+	case *ast.FloatLiteral:
+		targetReg := g.function.addTemp()
+		g.function.emit(OpcodeLoadConst, targetReg, g.function.emitConstantValue(getOperandValueFromConstant(expr)))
 		return targetReg
 	case *ast.BoolLiteral:
 		var value bool
@@ -373,6 +392,20 @@ func getOperandValueFromConstant(expr ast.Expression) *OperandValue {
 		return &OperandValue{
 			Kind:  OperandTypeInt64,
 			Value: value,
+		}
+	case *ast.FloatLiteral:
+		value, err := strconv.ParseFloat(expr.Value, 64)
+		if err != nil {
+			panic("getOperandValueFromConstant: invalid float literal")
+		}
+		return &OperandValue{
+			Kind:  OperandTypeFloat64,
+			Value: value,
+		}
+	case *ast.BoolLiteral:
+		return &OperandValue{
+			Kind:  OperandTypeBool,
+			Value: expr.Value == "true",
 		}
 	case *ast.StringLiteral:
 		return &OperandValue{

@@ -25,8 +25,11 @@ const (
 	// Adds two registers and stores the result in register R(x)
 	OpcodeAdd // R(x) = R(y) + R(z), AddInt4 x y z
 
-	// Adds 32-bit signed immediate value and register value and stores the result in register R(X)
-	OpcodeAddImm32 // R(x) = R(y) + z
+	// Raises a number to a power (exponentiation)
+	OpcodePow // R(x) = R(y) ^ R(z), PowInt4 x y z
+
+	// Modulus operation
+	OpcodeMod // R(x) = R(y) % R(z), ModInt4 x y z
 
 	// Subtracts two integers and stores the result in register R(x)
 	OpcodeSub // R(x) = R(y) - R(z), SubInt4 x y z
@@ -38,10 +41,19 @@ const (
 	OpcodeDiv // R(x) = R(y) / R(z), DivInt4 x y z
 
 	// Performs bitwise AND operation
-	OpcodeBitwiseAnd // R(x) = R(y) & R(z)
+	OpcodeAnd // R(x) = R(y) & R(z)
 
 	// Performs bitwise OR operation
-	OpcodeBitwiseOr // R(x) = R(y) | R(z)
+	OpcodeOr // R(x) = R(y) | R(z)
+
+	// Performs bitwise XOR operation
+	OpcodeXor // R(x) = R(y) ^ R(z)
+
+	// Performs bitwise shift left operation
+	OpcodeShl // R(x) = R(y) << R(z)
+
+	// Performs bitwise shift right operation
+	OpcodeShr // R(x) = R(y) >> R(z)
 
 	// Performs equality check
 	OpcodeEq // R(x) = R(y) == R(z)
@@ -63,6 +75,9 @@ const (
 
 	// Inverts the boolean value of a register
 	OpcodeNot // R(x) = !R(y)
+
+	// Negates the value of a register
+	OpcodeNeg // R(x) = -R(y)
 
 	// Jump to a specific address
 	OpcodeJump // Jump [address]
@@ -87,12 +102,16 @@ var opcodeNames = map[Opcode]string{
 	OpcodeLoadConst:  "LoadConst",
 	OpcodeLoadString: "LoadString",
 	OpcodeAdd:        "Add",
-	OpcodeAddImm32:   "AddImm4",
 	OpcodeSub:        "Sub",
 	OpcodeMul:        "Mul",
 	OpcodeDiv:        "Div",
-	OpcodeBitwiseAnd: "And",
-	OpcodeBitwiseOr:  "Or",
+	OpcodePow:        "Pow",
+	OpcodeMod:        "Mod",
+	OpcodeShl:        "Shl",
+	OpcodeShr:        "Shr",
+	OpcodeXor:        "Xor",
+	OpcodeAnd:        "And",
+	OpcodeOr:         "Or",
 	OpcodeEq:         "Eq",
 	OpcodeGt:         "Gt",
 	OpcodeGte:        "Gte",
@@ -100,6 +119,7 @@ var opcodeNames = map[Opcode]string{
 	OpcodeLt:         "Lt",
 	OpcodeLte:        "Lte",
 	OpcodeNot:        "Not",
+	OpcodeNeg:        "Neg",
 	OpcodeJump:       "Jump",
 	OpcodeJumpIf:     "JumpIf",
 	OpcodeCall:       "Call",

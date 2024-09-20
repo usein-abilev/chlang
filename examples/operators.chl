@@ -1,0 +1,149 @@
+fn assert(expected: bool, message: string) {
+    if !expected {
+        println("Assertion failed:", message);
+    }
+}
+
+
+{
+    let a = 1;
+    let b = 2 + 3 + 4
+    let c: i32 = 2 * 3 ** 4;
+    let d = (-a + b) / 2;
+    println(a, b, c, d)
+
+    let negative_number = -2147483647;
+    println("negative_number:", negative_number);
+
+    let negative_number2 = -(2147483647);
+    let positive_number = -(-2147483647);
+    assert(a == 1, "Assignment test failed: let a = 1;");
+    assert(b == 9, "Assignment test failed: let b = 2 + 3 + 4;");
+    assert(c == 162, "Assignment test failed: let c: i32 = 2 * 3 ** 4;");
+    assert(d == 4, "Assignment test failed: let d = (-a + b) / 2;");
+    assert(negative_number == -2147483647, "Assignment test failed: let negative_number = -2147483647;");
+    assert(negative_number2 == -2147483647, "Assignment test failed: let negative_number2 = -(2147483647);");
+    assert(positive_number == 2147483647, "Assignment test failed: let positive_number = -(-2147483647);");
+}
+
+// Test for addition operator
+let a = 5 + 3;
+assert(a == 8, "Addition test failed");
+
+// Test for subtraction operator
+let b = 10 - 2;
+assert(b == 8, "Subtraction test failed");
+
+// Test for multiplication operator
+let c = 4 * 2;
+assert(c == 8, "Multiplication test failed");
+
+// Test for division operator
+let d = 16 / 2;
+assert(d == 8, "Division test failed");
+
+// Test for modulus operator
+let e = 9 % 2;
+assert(e == 1, "Modulus test failed");
+
+// Test for exponentiation operator
+let f = 2 ** 3;
+assert(f == 8, "Exponentiation test failed");
+
+// Test for bitwise AND
+let g = 5 & 3; // 0101 & 0011 = 0001
+assert(g == 1, "Bitwise AND test failed");
+
+// Test for bitwise OR
+let h = 5 | 3; // 0101 | 0011 = 0111
+assert(h == 7, "Bitwise OR test failed");
+
+// Test for bitwise XOR
+let i = 5 ^ 3; // 0101 ^ 0011 = 0110
+assert(i == 6, "Bitwise XOR test failed");
+
+// Test for bitwise left shift
+let j = 5 << 1; // 0101 << 1 = 1010
+assert(j == 10, "Bitwise left shift test failed");
+
+// Test for bitwise right shift
+let k = 5 >> 1; // 0101 >> 1 = 0010
+assert(k == 2, "Bitwise right shift test failed");
+
+// Test for logical AND
+let l = true && false;
+assert(l == false, "Logical AND test failed");
+
+// Test for logical OR
+let m = true || false;
+assert(m == true, "Logical OR test failed");
+
+// Test for logical NOT
+let n = !true;
+assert(n == false, "Logical NOT test failed");    
+
+let o = 5;
+o += 3;
+assert(o == 8, "Compound addition (+=) test failed");
+
+let p = 10;
+p -= 2;
+assert(p == 8, "Compound subtraction (-=) test failed");
+
+let q = 2;
+q *= 4;
+assert(q == 8, "Compound multiplication (*=) test failed");
+
+let r = 16;
+r /= 2;
+assert(r == 8, "Compound division (/=) test failed");
+
+let s = 9;
+s %= 2;
+assert(s == 1, "Compound modulus (%=) test failed");
+
+let t = 2;
+t **= 3;
+assert(t == 8, "Compound exponentiation (**=) test failed");
+
+let u = 5;
+u &= 3;
+assert(u == 1, "Compound AND (&=) test failed");
+
+let v = 5;
+v |= 3;
+assert(v == 7, "Compound OR (|=) test failed");
+
+let w = 5;
+w ^= 3;
+assert(w == 6, "Compound XOR (^=) test failed");
+
+let x = 5;
+x <<= 1;
+assert(x == 10, "Compound left shift (<<=) test failed");
+
+let y = 5;
+y >>= 1;
+assert(y == 2, "Compound right shift (>>=) test failed");
+
+{
+    let a = 10 + 2 * 3;
+    assert(a == 16, "Operator precedence test failed (10 + 2 * 3)");
+    let b = a;
+    let c = 4 / 2 + 3;
+    assert(c == 5, "Operator precedence test failed (4 / 2 + 3)");
+    let d = b * c;
+    assert(d == 80, "Operator precedence test failed (16 * 5)");
+    let e = 1 + 2 * 3 + 4 / 2;
+    assert(e == 9, "Operator precedence test failed (1 + 2 * 3 + 4 / 2)");
+    
+    e = d = a;
+    assert(e == 16, "Right-associative test failed (e = d = a)");
+    assert(d == 16, "Right-associative test failed (e = d = a)");
+    assert(a == 16, "Right-associative test failed (e = d = a)");
+}
+
+{
+    let a = 1 / 2;
+    assert(a == 0, "Division by zero test failed");
+}
