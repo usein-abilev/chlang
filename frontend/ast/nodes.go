@@ -168,6 +168,14 @@ func (BadExpression) Node() {}
 // BadStatement are used to represent a syntax error w/o halting the parser
 func (BadStatement) Node() {}
 
+func IsConstantASTNode(node Node) bool {
+	switch node.(type) {
+	case *IntLiteral, *FloatLiteral, *BoolLiteral, *StringLiteral:
+		return true
+	}
+	return false
+}
+
 // Program is the root node of the AST
 type Program struct {
 	Statements []Statement

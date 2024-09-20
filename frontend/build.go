@@ -8,6 +8,7 @@ import (
 	"github.com/usein-abilev/chlang/frontend/checker"
 	"github.com/usein-abilev/chlang/frontend/errors"
 	"github.com/usein-abilev/chlang/frontend/scanner"
+	"github.com/usein-abilev/chlang/frontend/transformer"
 )
 
 func Build(filepath string) *ast.Program {
@@ -53,6 +54,9 @@ func Build(filepath string) *ast.Program {
 
 		os.Exit(1)
 	}
+
+	// AST optimization phase
+	program = transformer.Transform(program)
 
 	return program
 }
