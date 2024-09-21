@@ -84,7 +84,7 @@ func (c *Checker) visitStatement(statement ast.Statement) {
 			Function:   nil,
 			Used:       false,
 			Name:       stmt.Identifier.Value,
-			Type:       symbols.SymbolTypeInt64,
+			Type:       symbols.SymbolTypeInt32,
 			EntityType: symbols.SymbolTypeVariable,
 			Position:   stmt.Span.Start,
 		}
@@ -114,7 +114,7 @@ func (c *Checker) visitStatement(statement ast.Statement) {
 			return
 		}
 		signature := c.function.Function
-		if !symbols.IsCompatibleType(signature.ReturnType, exprReturnType) {
+		if !symbols.IsLeftCompatibleType(signature.ReturnType, exprReturnType) {
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message:  fmt.Sprintf("function '%s' returns '%s', but expression type is '%s'", c.function.Name, signature.ReturnType, exprReturnType),
 				Position: stmt.Span.Start,
@@ -149,7 +149,7 @@ func (c *Checker) visitConstDeclaration(stmt *ast.ConstDeclarationStatement) {
 
 	if stmt.Type != nil {
 		constType := symbols.GetTypeByTag(stmt.Type.Value)
-		if !symbols.IsCompatibleType(constType, constValueType) {
+		if !symbols.IsLeftCompatibleType(constType, constValueType) {
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message: fmt.Sprintf("constant '%s' has type '%s', but value type is '%s'", stmt.Name.Value, constType, constValueType),
 			})
@@ -191,7 +191,7 @@ func (c *Checker) visitVarDeclaration(stmt *ast.VarDeclarationStatement) {
 			}
 		} else {
 			typeTag := symbols.GetTypeByTag(stmt.Type.Value)
-			if !symbols.IsCompatibleType(typeTag, varType) {
+			if !symbols.IsLeftCompatibleType(typeTag, varType) {
 				c.Errors = append(c.Errors, &errors.SemanticError{
 					Message:  fmt.Sprintf("variable '%s' has type '%s', but value type is '%s'", stmt.Name.Value, typeTag, varType),
 					Position: stmt.Span.Start,
@@ -379,7 +379,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 				})
 				return symbols.SymbolTypeInvalid
 			}
-			if !symbols.IsCompatibleType(leftType, rightType) {
+			if !symbols.IsLeftCompatibleType(leftType, rightType) {
 				c.Errors = append(c.Errors, &errors.SemanticError{
 					Message: fmt.Sprintf(
 						"incompatible type of an assign expression '%s' (left: %s, right: %s)",
@@ -431,7 +431,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 			for idx, argExpr := range e.Args {
 				argExprType := c.inferExpression(argExpr)
 				argSymbol := sym.Function.Args[idx].Type
-				if !symbols.IsCompatibleType(argSymbol, argExprType) {
+				if !symbols.IsLeftCompatibleType(argSymbol, argExprType) {
 					c.Errors = append(c.Errors, &errors.SemanticError{
 						Message:  fmt.Sprintf("function '%s' expects argument '%s' to be '%s', but got '%s'", e.Function.Value, sym.Function.Args[idx].Name, argSymbol, argExprType),
 						Position: e.Span.Start,
@@ -559,7 +559,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 			elseType = c.inferExpression(elseBlock)
 		}
 
-		if thenType != elseType {
+		if !symbols.IsCompatibleType(thenType, elseType) {
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message:  fmt.Sprintf("cannot determine a single type of if expression (then: %s, else: %s)", thenType, elseType),
 				HelpMsg:  "",
@@ -569,7 +569,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 			return symbols.SymbolTypeInvalid
 		}
 
-		return thenType
+		return symbols.GetMaxType(thenType, elseType)
 	}
 
 	c.Errors = append(c.Errors, &errors.SemanticError{
@@ -751,7 +751,7 @@ func (c *Checker) checkTypesCompatibility(a, b symbols.SymbolValueType, operator
 		}
 	case chToken.EQUALS, chToken.NOT_EQUALS, chToken.LESS,
 		chToken.LESS_EQUALS, chToken.GREATER, chToken.GREATER_EQUALS, chToken.AND, chToken.OR:
-		if a == b {
+		if symbols.IsCompatibleType(a, b) {
 			return symbols.SymbolTypeBool, nil
 		}
 		return symbols.SymbolTypeInvalid, fmt.Errorf("type mismatch: operator '%s' requires operands of the same type (left: %s, right: %s)", operator.Literal, a, b)

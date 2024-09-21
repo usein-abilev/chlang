@@ -384,7 +384,10 @@ func (g *RVMGenerator) emitExpression(expression ast.Expression) RegisterAddress
 func getOperandValueFromConstant(expr ast.Expression) *OperandValue {
 	switch expr := expr.(type) {
 	case *ast.IntLiteral:
-		value, err := strconv.ParseInt(expr.Value, 0, 64)
+		// TODO: handle overflow
+		// TODO: Add unsigned integers support
+		bitSize := expr.Type.GetNumberBitSize()
+		value, err := strconv.ParseInt(expr.Value, 0, bitSize)
 		if err != nil {
 			panic(fmt.Sprintf("getOperandValueFromConstant: invalid integer literal: %s (base=%d)", expr.Value, expr.Base))
 		}
@@ -393,7 +396,8 @@ func getOperandValueFromConstant(expr ast.Expression) *OperandValue {
 			Value: value,
 		}
 	case *ast.FloatLiteral:
-		value, err := strconv.ParseFloat(expr.Value, 64)
+		bitSize := expr.Type.GetNumberBitSize()
+		value, err := strconv.ParseFloat(expr.Value, bitSize)
 		if err != nil {
 			panic("getOperandValueFromConstant: invalid float literal")
 		}

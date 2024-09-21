@@ -94,6 +94,20 @@ func (t SymbolValueType) IsUnsigned() bool {
 	return false
 }
 
+func (t SymbolValueType) GetNumberBitSize() int {
+	switch t {
+	case SymbolTypeInt8, SymbolTypeUint8:
+		return 8
+	case SymbolTypeInt16, SymbolTypeUint16:
+		return 16
+	case SymbolTypeInt32, SymbolTypeUint32:
+		return 32
+	case SymbolTypeInt64, SymbolTypeUint64:
+		return 64
+	}
+	return 0
+}
+
 // GetMaxType returns the type with the highest precedence
 // Yes, this is a very naive implementation
 func GetMaxType(a, b SymbolValueType) SymbolValueType {
@@ -104,9 +118,9 @@ func GetMaxType(a, b SymbolValueType) SymbolValueType {
 	}
 }
 
-// IsCompatibleType checks if the left type is compatible with the right type
+// IsLeftCompatibleType checks if the left type is compatible with the right type
 // This is used for type checking
-func IsCompatibleType(left, right SymbolValueType) bool {
+func IsLeftCompatibleType(left, right SymbolValueType) bool {
 	if left == right {
 		return true
 	}
@@ -115,6 +129,19 @@ func IsCompatibleType(left, right SymbolValueType) bool {
 		(left.IsSigned() && right.IsSigned()) ||
 		(left.IsUnsigned() && right.IsUnsigned()) {
 		return left >= right
+	}
+
+	return false
+}
+
+// IsCompatibleType checks if the left type is compatible with the right type
+func IsCompatibleType(left, right SymbolValueType) bool {
+	if left == right {
+		return true
+	}
+
+	if left.IsNumeric() && right.IsNumeric() {
+		return true
 	}
 
 	return false
