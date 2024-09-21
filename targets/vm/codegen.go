@@ -385,9 +385,9 @@ func (g *RVMGenerator) emitExpression(expression ast.Expression) RegisterAddress
 func getOperandValueFromConstant(expr ast.Expression) *OperandValue {
 	switch expr := expr.(type) {
 	case *ast.IntLiteral:
-		value, err := strconv.ParseInt(expr.Value, expr.Base, 64)
+		value, err := strconv.ParseInt(expr.Value, 0, 64)
 		if err != nil {
-			panic("getOperandValueFromConstant: invalid int literal")
+			panic(fmt.Sprintf("getOperandValueFromConstant: invalid integer literal: %s (base=%d)", expr.Value, expr.Base))
 		}
 		return &OperandValue{
 			Kind:  OperandTypeInt64,

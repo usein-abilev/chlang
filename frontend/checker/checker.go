@@ -114,7 +114,7 @@ func (c *Checker) visitStatement(statement ast.Statement) {
 			return
 		}
 		signature := c.function.Function
-		if !c.isCompatibleType(signature.ReturnType, exprReturnType) {
+		if !symbols.IsCompatibleType(signature.ReturnType, exprReturnType) {
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message:  fmt.Sprintf("function '%s' returns '%s', but expression type is '%s'", c.function.Name, signature.ReturnType, exprReturnType),
 				Position: stmt.Span.Start,
@@ -149,7 +149,7 @@ func (c *Checker) visitConstDeclaration(stmt *ast.ConstDeclarationStatement) {
 
 	if stmt.Type != nil {
 		constType := symbols.GetTypeByTag(stmt.Type.Value)
-		if !c.isCompatibleType(constType, constValueType) {
+		if !symbols.IsCompatibleType(constType, constValueType) {
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message: fmt.Sprintf("constant '%s' has type '%s', but value type is '%s'", stmt.Name.Value, constType, constValueType),
 			})
@@ -179,12 +179,26 @@ func (c *Checker) visitVarDeclaration(stmt *ast.VarDeclarationStatement) {
 	var varType symbols.SymbolValueType
 	if stmt.Value != nil {
 		varType = c.inferExpression(stmt.Value)
-		if stmt.Type != nil && !c.isCompatibleType(varType, symbols.GetTypeByTag(stmt.Type.Value)) {
-			c.Errors = append(c.Errors, &errors.SemanticError{
-				Message:  fmt.Sprintf("variable '%s' has type '%s', but value type is '%s'", stmt.Name.Value, stmt.Type.Value, varType),
-				Position: stmt.Span.Start,
-			})
-			return
+		if stmt.Type == nil {
+			if varType.IsFloat() {
+				varType = symbols.SymbolTypeFloat64
+			}
+			if varType.IsUnsigned() {
+				varType = symbols.GetMaxType(symbols.SymbolTypeUint32, varType)
+			}
+			if varType.IsSigned() {
+				varType = symbols.GetMaxType(symbols.SymbolTypeInt32, varType)
+			}
+		} else {
+			typeTag := symbols.GetTypeByTag(stmt.Type.Value)
+			if !symbols.IsCompatibleType(typeTag, varType) {
+				c.Errors = append(c.Errors, &errors.SemanticError{
+					Message:  fmt.Sprintf("variable '%s' has type '%s', but value type is '%s'", stmt.Name.Value, typeTag, varType),
+					Position: stmt.Span.Start,
+				})
+				return
+			}
+			varType = typeTag
 		}
 	} else if stmt.Type == nil {
 		c.Errors = append(c.Errors, &errors.SemanticError{
@@ -365,7 +379,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 				})
 				return symbols.SymbolTypeInvalid
 			}
-			if leftType != rightType {
+			if !symbols.IsCompatibleType(leftType, rightType) {
 				c.Errors = append(c.Errors, &errors.SemanticError{
 					Message: fmt.Sprintf(
 						"incompatible type of an assign expression '%s' (left: %s, right: %s)",
@@ -417,7 +431,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 			for idx, argExpr := range e.Args {
 				argExprType := c.inferExpression(argExpr)
 				argSymbol := sym.Function.Args[idx].Type
-				if !c.isCompatibleType(argSymbol, argExprType) {
+				if !symbols.IsCompatibleType(argSymbol, argExprType) {
 					c.Errors = append(c.Errors, &errors.SemanticError{
 						Message:  fmt.Sprintf("function '%s' expects argument '%s' to be '%s', but got '%s'", e.Function.Value, sym.Function.Args[idx].Name, argSymbol, argExprType),
 						Position: e.Span.Start,
@@ -438,9 +452,17 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 	case *ast.StringLiteral:
 		return symbols.SymbolTypeString
 	case *ast.IntLiteral:
-		return c.inferNumberLiteralType(e)
+		return c.inferIntLiteral(e)
 	case *ast.FloatLiteral:
-		return c.inferNumberLiteralType(e)
+		if _, err := strconv.ParseFloat(e.Value, 64); err == nil {
+			return symbols.SymbolTypeFloat64
+		}
+
+		return c.inferIntLiteral(&ast.IntLiteral{
+			Span:  e.Span,
+			Value: e.Value,
+			Base:  0, // 0 means auto-detect base
+		})
 	case *ast.BoolLiteral:
 		return symbols.SymbolTypeBool
 	case *ast.UnaryExpression:
@@ -476,18 +498,17 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 	case *ast.BinaryExpression:
 		leftType := c.inferExpression(e.Left)
 		rightType := c.inferExpression(e.Right)
-		inftype, err := c.checkTypeMismatch(leftType, rightType, e.Operator)
+		inferred, err := c.checkTypesCompatibility(leftType, rightType, e.Operator)
 
 		if err != nil {
-			fmt.Printf("Error checking binary expression: %s\n", e.Operator.Literal)
-			e.PrintTree(2)
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message:  err.Error(),
 				Position: e.Span.Start,
 			})
 			return symbols.SymbolTypeInvalid
 		}
-		return inftype
+
+		return inferred
 	case *ast.IfExpression:
 		condType := c.inferExpression(e.Condition)
 		if condType != symbols.SymbolTypeBool {
@@ -533,39 +554,6 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 	return symbols.SymbolTypeInvalid
 }
 
-func (c *Checker) inferNumberLiteralType(expression ast.Expression) symbols.SymbolValueType {
-	switch node := expression.(type) {
-	case *ast.IntLiteral:
-		_, err := strconv.ParseInt(node.Value, 0, 32)
-		if err != nil {
-			c.Errors = append(c.Errors, &errors.SemanticError{
-				Message:  fmt.Sprintf("value '%s' is out of integer 32-bit range", node.Value),
-				Position: node.Span.Start,
-			})
-			return symbols.SymbolTypeInvalid
-		}
-		return symbols.SymbolTypeInt32
-	case *ast.FloatLiteral:
-		_, err := strconv.ParseFloat(node.Value, 64)
-		if err == nil {
-			return symbols.SymbolTypeFloat64
-		}
-
-		_, err = strconv.ParseInt(node.Value, 10, 32)
-		if err == nil {
-			return symbols.SymbolTypeInt32
-		}
-
-		c.Errors = append(c.Errors, &errors.SemanticError{
-			Message:  fmt.Sprintf("value '%s' is out of integer 32-bit range", node.Value),
-			Position: node.Span.Start,
-		})
-		return symbols.SymbolTypeInvalid
-	}
-
-	return symbols.SymbolTypeInvalid
-}
-
 func (c *Checker) inferIfBlockStatement(block *ast.BlockStatement) symbols.SymbolValueType {
 	c.SymbolTable.OpenScope()
 	c.populateSymbolDeclarations(block.Statements)
@@ -586,11 +574,42 @@ func (c *Checker) inferIfBlockStatement(block *ast.BlockStatement) symbols.Symbo
 	return returnType
 }
 
-func (c *Checker) isCompatibleType(a, b symbols.SymbolValueType) bool {
-	return a == b // TODO: Right now, we just strictly comparing two internal types
+func (c *Checker) inferIntLiteral(node *ast.IntLiteral) symbols.SymbolValueType {
+	intValue, err := strconv.ParseInt(node.Value, 0, 64)
+
+	if err != nil {
+		c.Errors = append(c.Errors, &errors.SemanticError{
+			Message:  fmt.Sprintf("value '%s' is out of integer 64-bit range", node.Value),
+			Position: node.Span.Start,
+		})
+		return symbols.SymbolTypeInvalid
+	}
+
+	if intValue >= -128 && intValue <= 127 {
+		return symbols.SymbolTypeInt8
+	}
+
+	if intValue >= -32768 && intValue <= 32767 {
+		return symbols.SymbolTypeInt16
+	}
+
+	if intValue >= -2147483648 && intValue <= 2147483647 {
+		return symbols.SymbolTypeInt32
+	}
+
+	if intValue >= -9223372036854775808 && intValue <= 9223372036854775807 {
+		return symbols.SymbolTypeInt64
+	}
+
+	c.Errors = append(c.Errors, &errors.SemanticError{
+		Message:  fmt.Sprintf("value '%s' is out of integer 64-bit range", node.Value),
+		Position: node.Span.Start,
+	})
+
+	return symbols.SymbolTypeInvalid
 }
 
-func (c *Checker) checkTypeMismatch(a, b symbols.SymbolValueType, operator *chToken.Token) (symbols.SymbolValueType, error) {
+func (c *Checker) checkTypesCompatibility(a, b symbols.SymbolValueType, operator *chToken.Token) (symbols.SymbolValueType, error) {
 	switch operator.Type {
 	case chToken.PLUS,
 		chToken.MINUS,
@@ -603,23 +622,34 @@ func (c *Checker) checkTypeMismatch(a, b symbols.SymbolValueType, operator *chTo
 		chToken.CARET,
 		chToken.LEFT_SHIFT,
 		chToken.RIGHT_SHIFT:
-		if a == b {
-			return a, nil
-		}
-		if !a.IsNumeric() || !b.IsNumeric() {
-			return symbols.SymbolTypeInvalid, &errors.SemanticError{
-				Message:  fmt.Sprintf("typecheck: operator '%s' requires numeric operands", operator.Literal),
-				Position: operator.Position,
-				HelpMsg:  fmt.Sprintf("got '%s' and '%s'", a, b),
+		if a.IsNumeric() && b.IsNumeric() {
+			if a == b {
+				return a, nil
+			}
+			if a.IsFloat() || b.IsFloat() {
+				return symbols.SymbolTypeFloat64, nil
+			}
+
+			if a.IsSigned() && b.IsSigned() {
+				return symbols.GetMaxType(a, b), nil
+			}
+
+			if a.IsUnsigned() && b.IsUnsigned() {
+				return symbols.GetMaxType(a, b), nil
 			}
 		}
-		return a, nil
+
+		return symbols.SymbolTypeInvalid, &errors.SemanticError{
+			Message:  fmt.Sprintf("type mismatch: incompatible types (left: %s, right: %s) for operator '%s'", a, b, operator.Literal),
+			Position: operator.Position,
+			HelpMsg:  fmt.Sprintf("got '%s' and '%s'", a, b),
+		}
 	case chToken.EQUALS, chToken.NOT_EQUALS, chToken.LESS,
 		chToken.LESS_EQUALS, chToken.GREATER, chToken.GREATER_EQUALS, chToken.AND, chToken.OR:
 		if a == b {
 			return symbols.SymbolTypeBool, nil
 		}
-		return symbols.SymbolTypeInvalid, fmt.Errorf("typecheck: operator '%s' requires operands of the same type (left: %s, right: %s)", operator.Literal, a, b)
+		return symbols.SymbolTypeInvalid, fmt.Errorf("type mismatch: operator '%s' requires operands of the same type (left: %s, right: %s)", operator.Literal, a, b)
 	}
-	return symbols.SymbolTypeInvalid, fmt.Errorf("typecheck: unknown operator: %s", operator.Literal)
+	return symbols.SymbolTypeInvalid, fmt.Errorf("type mismatch: unknown operator: %s", operator.Literal)
 }
