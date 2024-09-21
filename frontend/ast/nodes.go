@@ -41,13 +41,23 @@ type (
 		Value string
 	}
 	IntLiteral struct {
-		Span  token.Span
-		Value string
-		Base  int // integer base: 16, 10, 8, 2
+		Span token.Span
+
+		// Type is determined during type checking
+		Type symbols.SymbolValueType
+
+		Value  string
+		Suffix string // type suffix: i8, i16, i32, i64, u8, u16, u32, u64
+		Base   int    // integer base: 16, 10, 8, 2
 	}
 	FloatLiteral struct {
-		Span  token.Span
-		Value string
+		Span token.Span
+
+		// Type is determined during type checking
+		Type symbols.SymbolValueType
+
+		Suffix string // type suffix: f32, f64
+		Value  string
 	}
 	StringLiteral struct {
 		Span  token.Span

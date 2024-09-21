@@ -452,17 +452,41 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 	case *ast.StringLiteral:
 		return symbols.SymbolTypeString
 	case *ast.IntLiteral:
-		return c.inferIntLiteral(e)
+		if e.Suffix != "" {
+			return c.checkIntLiteralSuffix(e)
+		}
+		intType := c.inferIntLiteral(e)
+		e.Type = intType // save the type for the code generation
+		return intType
 	case *ast.FloatLiteral:
-		if _, err := strconv.ParseFloat(e.Value, 64); err == nil {
-			return symbols.SymbolTypeFloat64
+		bitSize := 64
+		symbolType := symbols.SymbolTypeFloat64
+
+		if e.Suffix != "" {
+			switch e.Suffix {
+			case "f32":
+				bitSize = 32
+				symbolType = symbols.SymbolTypeFloat32
+			case "f64":
+				bitSize = 64
+			default:
+				c.Errors = append(c.Errors, &errors.SemanticError{
+					Message:  fmt.Sprintf("unknown float type suffix '%s'", e.Suffix),
+					Position: e.Span.Start,
+				})
+			}
 		}
 
-		return c.inferIntLiteral(&ast.IntLiteral{
-			Span:  e.Span,
-			Value: e.Value,
-			Base:  0, // 0 means auto-detect base
-		})
+		if _, err := strconv.ParseFloat(e.Value, bitSize); err != nil {
+			c.Errors = append(c.Errors, &errors.SemanticError{
+				Message:  fmt.Sprintf("value '%s' is out of float %d-bit range", e.Value, bitSize),
+				Position: e.Span.Start,
+			})
+			return symbols.SymbolTypeInvalid
+		}
+
+		e.Type = symbolType // save the type for the code generation
+		return symbolType
 	case *ast.BoolLiteral:
 		return symbols.SymbolTypeBool
 	case *ast.UnaryExpression:
@@ -575,11 +599,11 @@ func (c *Checker) inferIfBlockStatement(block *ast.BlockStatement) symbols.Symbo
 }
 
 func (c *Checker) inferIntLiteral(node *ast.IntLiteral) symbols.SymbolValueType {
-	intValue, err := strconv.ParseInt(node.Value, 0, 64)
-
+	bitSize := 64
+	intValue, err := strconv.ParseInt(node.Value, 0, bitSize)
 	if err != nil {
 		c.Errors = append(c.Errors, &errors.SemanticError{
-			Message:  fmt.Sprintf("value '%s' is out of integer 64-bit range", node.Value),
+			Message:  fmt.Sprintf("value '%s' is out of integer %d-bit range", node.Value, bitSize),
 			Position: node.Span.Start,
 		})
 		return symbols.SymbolTypeInvalid
@@ -601,8 +625,89 @@ func (c *Checker) inferIntLiteral(node *ast.IntLiteral) symbols.SymbolValueType 
 		return symbols.SymbolTypeInt64
 	}
 
+	return symbols.SymbolTypeInvalid
+}
+
+func (c *Checker) checkIntLiteralSuffix(node *ast.IntLiteral) symbols.SymbolValueType {
+	mode := node.Suffix[0]
+	bitSize, err := strconv.Atoi(node.Suffix[1:])
+
+	if mode == 'f' {
+		if _, err := strconv.ParseFloat(node.Value, bitSize); err != nil {
+			c.Errors = append(c.Errors, &errors.SemanticError{
+				Message:  fmt.Sprintf("value '%s' is out of float %d-bit range", node.Value, bitSize),
+				Position: node.Span.Start,
+			})
+			return symbols.SymbolTypeInvalid
+		}
+
+		if bitSize == 32 {
+			return symbols.SymbolTypeFloat32
+		}
+
+		return symbols.SymbolTypeFloat64
+	} else if mode == 'u' { // unsigned int
+		if err != nil {
+			c.Errors = append(c.Errors, &errors.SemanticError{
+				Message:  fmt.Sprintf("invalid integer type suffix '%s'", node.Suffix),
+				Position: node.Span.Start,
+			})
+			return symbols.SymbolTypeInvalid
+		}
+
+		uintValue, err := strconv.ParseUint(node.Value, 0, bitSize)
+		if err != nil {
+			c.Errors = append(c.Errors, &errors.SemanticError{
+				Message:  fmt.Sprintf("value '%s' is out of unsigned %d-bit range", node.Value, bitSize),
+				Position: node.Span.Start,
+			})
+			return symbols.SymbolTypeInvalid
+		}
+
+		if bitSize == 8 && uintValue <= 255 {
+			return symbols.SymbolTypeUint8
+		}
+
+		if bitSize == 16 && uintValue <= 65535 {
+			return symbols.SymbolTypeUint16
+		}
+
+		if bitSize == 32 && uintValue <= 4294967295 {
+			return symbols.SymbolTypeUint32
+		}
+
+		if bitSize == 64 && uintValue <= 18446744073709551615 {
+			return symbols.SymbolTypeUint64
+		}
+	} else if mode == 'i' {
+		intValue, err := strconv.ParseInt(node.Value, 0, bitSize)
+		if err != nil {
+			c.Errors = append(c.Errors, &errors.SemanticError{
+				Message:  fmt.Sprintf("value '%s' is out of integer %d-bit range", node.Value, bitSize),
+				Position: node.Span.Start,
+			})
+			return symbols.SymbolTypeInvalid
+		}
+
+		if bitSize == 8 && intValue >= -128 && intValue <= 127 {
+			return symbols.SymbolTypeInt8
+		}
+
+		if bitSize == 16 && intValue >= -32768 && intValue <= 32767 {
+			return symbols.SymbolTypeInt16
+		}
+
+		if bitSize == 32 && intValue >= -2147483648 && intValue <= 2147483647 {
+			return symbols.SymbolTypeInt32
+		}
+
+		if bitSize == 64 && intValue >= -9223372036854775808 && intValue <= 9223372036854775807 {
+			return symbols.SymbolTypeInt64
+		}
+	}
+
 	c.Errors = append(c.Errors, &errors.SemanticError{
-		Message:  fmt.Sprintf("value '%s' is out of integer 64-bit range", node.Value),
+		Message:  fmt.Sprintf("unknown integer type suffix '%s'", node.Suffix),
 		Position: node.Span.Start,
 	})
 

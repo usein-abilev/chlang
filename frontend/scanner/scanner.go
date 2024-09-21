@@ -397,6 +397,15 @@ func (s *Scanner) scanNumber() token.Token {
 	}
 
 	literal := strings.ReplaceAll(s.input[start:s.offset], "_", "")
+
+	// scan number literal suffix
+	if intBase == 10 && (s.char == 'u' || s.char == 'f' || s.char == 'i') {
+		literal += "#" + string(s.char)
+		for s.next() != endOfFile && unicode.IsDigit(s.char) {
+			literal += string(s.char)
+		}
+	}
+
 	if dot || exp {
 		// If the number contains a dot or an exponent, it is a float number
 		return s.produceToken(

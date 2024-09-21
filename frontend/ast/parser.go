@@ -385,19 +385,55 @@ func (p *Parser) parsePrimary() Expression {
 		if token.Metadata != nil {
 			intBase = token.Metadata.IntegerBase
 		}
+
+		literal, suffix, err := parseNumberLiteralSuffix(token.Literal)
+		if err != nil {
+			position := chToken.TokenPosition{
+				Row:    token.Position.Row,
+				Column: token.Position.Column + len(literal) - 1,
+			}
+			p.reportError(&compilerError.SyntaxError{
+				Position:  position,
+				ErrorLine: p.lexer.GetLineByPosition(position),
+				Message:   err.Error(),
+				Help:      "valid number literal suffixes are: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64",
+			})
+			return nil
+		}
+
 		return &IntLiteral{
-			Value: token.Literal,
-			Base:  intBase,
+			Value:  literal,
+			Base:   intBase,
+			Suffix: suffix,
 			Span: chToken.Span{
 				Start: startExprPos,
 				End:   p.current.Position,
 			}}
 	case chToken.FLOAT_LITERAL:
 		token := p.consume(chToken.FLOAT_LITERAL)
-		return &FloatLiteral{Value: token.Literal, Span: chToken.Span{
-			Start: startExprPos,
-			End:   p.current.Position,
-		}}
+
+		literal, suffix, err := parseNumberLiteralSuffix(token.Literal)
+		if err != nil {
+			position := chToken.TokenPosition{
+				Row:    token.Position.Row,
+				Column: token.Position.Column + len(literal) - 1,
+			}
+			p.reportError(&compilerError.SyntaxError{
+				Position:  position,
+				ErrorLine: p.lexer.GetLineByPosition(position),
+				Message:   err.Error(),
+				Help:      "valid float literal suffixes are: f32, f64",
+			})
+			return nil
+		}
+
+		return &FloatLiteral{
+			Value:  literal,
+			Suffix: suffix,
+			Span: chToken.Span{
+				Start: startExprPos,
+				End:   p.current.Position,
+			}}
 	case chToken.STRING_LITERAL:
 		token := p.consume(chToken.STRING_LITERAL)
 		return &StringLiteral{Value: token.Literal, Span: chToken.Span{
@@ -431,6 +467,20 @@ func (p *Parser) parsePrimary() Expression {
 		Help:      "expected a primary expression",
 	})
 	return nil
+}
+
+func parseNumberLiteralSuffix(s string) (literal, suffix string, err error) {
+	startsIndex := strings.Index(s, "#")
+	if startsIndex == -1 {
+		return s, suffix, nil
+	}
+	literal, suffix = s[:startsIndex], s[startsIndex+1:]
+
+	switch suffix {
+	case "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64":
+		return literal, suffix, nil
+	}
+	return s, suffix, fmt.Errorf("invalid number literal suffix '%s'", suffix)
 }
 
 func (p *Parser) expect(t chToken.TokenType) bool {

@@ -296,7 +296,6 @@ func (g *RVMGenerator) emitExpression(expression ast.Expression) RegisterAddress
 			register := g.emitExpression(argumentExpr)
 			if int(register) < len(g.function.locals) && !g.function.locals[register].temp {
 				tempRegister := g.function.addTemp()
-				fmt.Printf("emit temporary register? %d\n", register)
 				g.function.emit(OpcodeMove, tempRegister, register)
 			}
 		}
