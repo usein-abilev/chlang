@@ -63,6 +63,7 @@ const (
 	VAR
 	STRUCT
 	CONST
+	TYPE
 	FUNCTION
 	RETURN
 	IF
@@ -160,6 +161,7 @@ var tokenSymbolNames = map[TokenType]string{
 	VAR:      "let",
 	STRUCT:   "struct",
 	CONST:    "const",
+	TYPE:     "type",
 	FUNCTION: "fn",
 	RETURN:   "return",
 	IF:       "if",
@@ -268,6 +270,7 @@ func IsLogicalOperator(op TokenType) bool {
 var identTokens = map[string]TokenType{
 	"let":      VAR,
 	"const":    CONST,
+	"type":     TYPE,
 	"struct":   STRUCT,
 	"fn":       FUNCTION,
 	"return":   RETURN,

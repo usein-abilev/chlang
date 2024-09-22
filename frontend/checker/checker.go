@@ -54,10 +54,13 @@ func (c *Checker) populateSymbolDeclarations(declarations []ast.Statement) {
 // Adds built-in functions to the symbol table
 func (c *Checker) addBuiltinFunctions() {
 	c.SymbolTable.Insert(&symbols.SymbolEntity{
-		Used:       true,
-		Name:       "println",
-		Type:       symbols.SymbolTypeVoid,
-		EntityType: symbols.SymbolTypeFunction,
+		Used: true,
+		Name: "println",
+		Type: &symbols.ChlangFunctionType{ // (...string) -> void
+			SpreadType: symbols.SymbolTypeString,
+			Return:     symbols.SymbolTypeVoid,
+		},
+		EntityType: symbols.SymbolEntityFunction,
 		Function: &symbols.FuncSymbolSignature{
 			SpreadArgument: true,
 			Args:           make([]*symbols.SymbolEntity, 0),
@@ -68,6 +71,8 @@ func (c *Checker) addBuiltinFunctions() {
 
 func (c *Checker) visitStatement(statement ast.Statement) {
 	switch stmt := statement.(type) {
+	case *ast.TypeDeclarationStatement:
+		c.visitTypeDeclaration(stmt)
 	case *ast.ConstDeclarationStatement:
 		c.visitConstDeclaration(stmt)
 	case *ast.VarDeclarationStatement:
@@ -85,7 +90,7 @@ func (c *Checker) visitStatement(statement ast.Statement) {
 			Used:       false,
 			Name:       stmt.Identifier.Value,
 			Type:       symbols.SymbolTypeInt32,
-			EntityType: symbols.SymbolTypeVariable,
+			EntityType: symbols.SymbolEntityVariable,
 			Position:   stmt.Span.Start,
 		}
 		c.SymbolTable.Insert(rangeVar)
@@ -125,6 +130,78 @@ func (c *Checker) visitStatement(statement ast.Statement) {
 	}
 }
 
+func (c *Checker) visitTypeDeclaration(stmt *ast.TypeDeclarationStatement) {
+	if sym := c.SymbolTable.LookupInScope(stmt.Name.Value); sym != nil {
+		c.Errors = append(c.Errors, &errors.SemanticError{
+			Message:  fmt.Sprintf("type '%s' has already been declared at %s", stmt.Name.Value, sym.Position),
+			Position: stmt.Span.Start,
+		})
+		return
+	}
+
+	// parse ast type specification
+	typeSpec := c.convertASTType(stmt.Spec)
+	symbols := &symbols.SymbolEntity{
+		Name:       stmt.Name.Value,
+		Type:       typeSpec,
+		EntityType: symbols.SymbolEntityUserDefined,
+		Position:   stmt.Span.Start,
+	}
+	c.SymbolTable.Insert(symbols)
+}
+
+func (c *Checker) convertASTType(spec ast.Expression) symbols.ChlangType {
+	switch s := spec.(type) {
+	case *ast.Identifier:
+		if tag, ok := symbols.GetPrimitiveTypeByTag(s.Value); ok {
+			return tag
+		}
+		symbol := c.SymbolTable.Lookup(s.Value)
+		if symbol == nil {
+			c.Errors = append(c.Errors, &errors.SemanticError{
+				Message:  fmt.Sprintf("type '%s' not found", s.Value),
+				Position: s.Span.Start,
+			})
+			return symbols.SymbolTypeInvalid
+		}
+		if symbol.EntityType != symbols.SymbolEntityUserDefined {
+			c.Errors = append(c.Errors, &errors.SemanticError{
+				Message:  fmt.Sprintf("'%s' is not a type", s.Value),
+				Position: s.Span.Start,
+			})
+			return symbols.SymbolTypeInvalid
+		}
+		return symbol.Type
+	case *ast.ArrayType:
+		arrayType := symbols.ChlangArrayType{
+			ElementType: c.convertASTType(s.Type),
+		}
+		if s.Size != nil {
+			size, ok := s.Size.(*ast.IntLiteral)
+			if !ok {
+				fmt.Printf("[warn]: array size must be a constant integer: %T\n", s.Size)
+				c.Errors = append(c.Errors, &errors.SemanticError{
+					Message:  "array size must be a constant integer",
+					Position: s.Size.GetSpan().Start,
+				})
+				return symbols.SymbolTypeInvalid
+			}
+			sizeType, length := c.inferIntLiteral(size)
+			if sizeType == symbols.SymbolTypeInvalid {
+				return symbols.SymbolTypeInvalid
+			}
+			arrayType.Length = int(length)
+		}
+		return arrayType
+	default:
+		c.Errors = append(c.Errors, &errors.SemanticError{
+			Message:  fmt.Sprintf("unknown type specification: %T", spec),
+			Position: spec.GetSpan().Start,
+		})
+		return symbols.SymbolTypeInvalid
+	}
+}
+
 func (c *Checker) visitConstDeclaration(stmt *ast.ConstDeclarationStatement) {
 	if sym := c.SymbolTable.LookupInScope(stmt.Name.Value); sym != nil {
 		c.Errors = append(c.Errors, &errors.SemanticError{
@@ -134,7 +211,7 @@ func (c *Checker) visitConstDeclaration(stmt *ast.ConstDeclarationStatement) {
 		return
 	}
 
-	var constValueType symbols.SymbolValueType
+	var constValueType symbols.ChlangPrimitiveType
 
 	// double-check, because we already checking for an initial value during the parsing stage
 	if stmt.Value == nil {
@@ -144,11 +221,21 @@ func (c *Checker) visitConstDeclaration(stmt *ast.ConstDeclarationStatement) {
 		})
 		return
 	} else {
-		constValueType = c.inferExpression(stmt.Value)
+		exprType := c.inferExpression(stmt.Value)
+		if _, ok := exprType.(symbols.ChlangPrimitiveType); !ok {
+			c.Errors = append(c.Errors, &errors.SemanticError{
+				Message:  fmt.Sprintf("invalid type of constant '%s'", stmt.Name.Value),
+				HelpMsg:  "only primitive types support for a constant declaration",
+				Position: stmt.Span.Start,
+				Span:     stmt.Span,
+			})
+			return
+		}
+		constValueType = exprType.(symbols.ChlangPrimitiveType)
 	}
 
 	if stmt.Type != nil {
-		constType := symbols.GetTypeByTag(stmt.Type.Value)
+		constType := c.convertASTType(stmt.Type)
 		if !symbols.IsLeftCompatibleType(constType, constValueType) {
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message: fmt.Sprintf("constant '%s' has type '%s', but value type is '%s'", stmt.Name.Value, constType, constValueType),
@@ -160,7 +247,7 @@ func (c *Checker) visitConstDeclaration(stmt *ast.ConstDeclarationStatement) {
 	symbol := &symbols.SymbolEntity{
 		Name:       stmt.Name.Value,
 		Type:       constValueType,
-		EntityType: symbols.SymbolTypeConstant,
+		EntityType: symbols.SymbolEntityConstant,
 		Position:   stmt.Span.Start,
 	}
 	c.SymbolTable.Insert(symbol)
@@ -176,21 +263,29 @@ func (c *Checker) visitVarDeclaration(stmt *ast.VarDeclarationStatement) {
 		return
 	}
 
-	var varType symbols.SymbolValueType
+	var varType symbols.ChlangType
 	if stmt.Value != nil {
 		varType = c.inferExpression(stmt.Value)
 		if stmt.Type == nil {
-			if varType.IsFloat() {
-				varType = symbols.SymbolTypeFloat64
-			}
-			if varType.IsUnsigned() {
-				varType = symbols.GetMaxType(symbols.SymbolTypeUint32, varType)
-			}
-			if varType.IsSigned() {
-				varType = symbols.GetMaxType(symbols.SymbolTypeInt32, varType)
+			if ty, ok := varType.(symbols.ChlangPrimitiveType); ok {
+				if ty.IsFloat() {
+					varType = symbols.SymbolTypeFloat64
+				}
+				if ty.IsUnsigned() {
+					varType = symbols.GetMaxType(symbols.SymbolTypeUint32, ty)
+				}
+				if ty.IsSigned() {
+					varType = symbols.GetMaxType(symbols.SymbolTypeInt32, ty)
+				}
+			} else {
+				c.Errors = append(c.Errors, &errors.SemanticError{
+					Message:  "unsupported type for variable declaration",
+					Position: stmt.Span.Start,
+				})
+				return
 			}
 		} else {
-			typeTag := symbols.GetTypeByTag(stmt.Type.Value)
+			typeTag := c.convertASTType(stmt.Type)
 			if !symbols.IsLeftCompatibleType(typeTag, varType) {
 				c.Errors = append(c.Errors, &errors.SemanticError{
 					Message:  fmt.Sprintf("variable '%s' has type '%s', but value type is '%s'", stmt.Name.Value, typeTag, varType),
@@ -207,7 +302,7 @@ func (c *Checker) visitVarDeclaration(stmt *ast.VarDeclarationStatement) {
 		})
 		return
 	} else {
-		varType = symbols.GetTypeByTag(stmt.Type.Value)
+		varType = c.convertASTType(stmt.Type)
 	}
 
 	if varType == symbols.SymbolTypeInvalid {
@@ -220,7 +315,7 @@ func (c *Checker) visitVarDeclaration(stmt *ast.VarDeclarationStatement) {
 	symbol := &symbols.SymbolEntity{
 		Name:       stmt.Name.Value,
 		Type:       varType,
-		EntityType: symbols.SymbolTypeVariable,
+		EntityType: symbols.SymbolEntityVariable,
 		Position:   stmt.Span.Start,
 	}
 	c.SymbolTable.Insert(symbol)
@@ -229,7 +324,7 @@ func (c *Checker) visitVarDeclaration(stmt *ast.VarDeclarationStatement) {
 
 // Checks function signature and adds it into the symbol table
 func (c *Checker) visitFuncSignature(decl *ast.FuncDeclarationStatement) {
-	if symbols.GetTypeByTag(decl.Name.Value) != symbols.SymbolTypeInvalid {
+	if _, ok := symbols.GetPrimitiveTypeByTag(decl.Name.Value); ok {
 		c.Errors = append(c.Errors, &errors.SemanticError{
 			Message:  fmt.Sprintf("cannot use type '%s' as a function name", decl.Name.Value),
 			Position: decl.Span.Start,
@@ -245,14 +340,16 @@ func (c *Checker) visitFuncSignature(decl *ast.FuncDeclarationStatement) {
 		return
 	}
 
-	var returnType symbols.SymbolValueType
+	functionType := &symbols.ChlangFunctionType{}
+
+	// infer return type
 	if decl.ReturnType == nil {
-		returnType = symbols.SymbolTypeVoid
+		functionType.Return = symbols.SymbolTypeVoid
 	} else {
-		returnType = symbols.GetTypeByTag(decl.ReturnType.Value)
+		functionType.Return = c.convertASTType(decl.ReturnType)
 	}
 
-	if returnType == symbols.SymbolTypeInvalid {
+	if functionType.Return == symbols.SymbolTypeInvalid {
 		c.Errors = append(c.Errors, &errors.SemanticError{
 			Message:  fmt.Sprintf("invalid function '%s' return type", decl.Name.Value),
 			Position: decl.Span.Start,
@@ -264,7 +361,8 @@ func (c *Checker) visitFuncSignature(decl *ast.FuncDeclarationStatement) {
 	used := false
 	if decl.Name.Value == "main" {
 		used = true
-		if returnType != symbols.SymbolTypeVoid {
+
+		if functionType.Return != symbols.SymbolTypeVoid {
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message:  "main function must return void",
 				Position: decl.Span.Start,
@@ -276,42 +374,45 @@ func (c *Checker) visitFuncSignature(decl *ast.FuncDeclarationStatement) {
 	funcSymbol := &symbols.SymbolEntity{
 		Name:       decl.Name.Value,
 		Used:       used,
-		Type:       returnType,
-		EntityType: symbols.SymbolTypeFunction,
+		Type:       functionType,
+		EntityType: symbols.SymbolEntityFunction,
 		Position:   decl.Span.Start,
 		Function: &symbols.FuncSymbolSignature{
 			Args:       make([]*symbols.SymbolEntity, 0),
-			ReturnType: returnType,
+			ReturnType: functionType.Return,
 		},
 	}
-	c.SymbolTable.Insert(funcSymbol)
 
 	for _, arg := range decl.Params {
-		internalType := symbols.GetTypeByTag(arg.Type.Value)
-		if internalType == symbols.SymbolTypeInvalid {
+		argType := c.convertASTType(arg.Type)
+		if argType == symbols.SymbolTypeInvalid {
 			c.Errors = append(c.Errors, &errors.SemanticError{
-				Message:  fmt.Sprintf("unknown type '%s' for argument '%s'", arg.Type.Value, arg.Name.Value),
+				Message:  fmt.Sprintf("unknown type '%s' for argument '%s'", arg.Type, arg.Name.Value),
 				Position: arg.Name.Span.Start,
 			})
-		} else if internalType == symbols.SymbolTypeVoid {
+		} else if argType == symbols.SymbolTypeVoid {
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message:  "cannot use 'void' as a type for function argument",
-				Position: arg.Type.Span.Start,
+				Position: arg.Type.GetSpan().Start,
 			})
 		}
 
 		argSymbol := &symbols.SymbolEntity{
-			EntityType: symbols.SymbolTypeVariable,
-			Type:       internalType,
+			EntityType: symbols.SymbolEntityVariable,
+			Type:       argType,
 			Name:       arg.Name.Value,
 			Position:   arg.Name.Span.Start,
 			Used:       false,
 		}
 
+		functionType.Args = append(functionType.Args, argType)
+
 		// Note that we don't insert the arguments into the symbol table because we don't check the function body here except for the arguments.
 		// Arguments will populates into the symbol table in 'visitFuncDeclaration' function
 		funcSymbol.Function.Args = append(funcSymbol.Function.Args, argSymbol)
 	}
+
+	c.SymbolTable.Insert(funcSymbol)
 
 	decl.Symbol = funcSymbol
 }
@@ -346,7 +447,7 @@ func (c *Checker) visitFuncBody(stmt *ast.FuncDeclarationStatement) {
 
 // Check expression type and return its internal type
 // If the expression is nil, return symbols.SymbolTypeVoid
-func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
+func (c *Checker) inferExpression(expr ast.Expression) symbols.ChlangType {
 	if expr == nil {
 		return symbols.SymbolTypeVoid
 	}
@@ -413,7 +514,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 			})
 			return symbols.SymbolTypeInvalid
 		}
-		if sym.EntityType != symbols.SymbolTypeFunction {
+		if sym.EntityType != symbols.SymbolEntityFunction {
 			c.Errors = append(c.Errors, &errors.SemanticError{
 				Message:  fmt.Sprintf("'%s' is not a function", e.Function.Value),
 				Position: e.Span.Start,
@@ -455,7 +556,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 		if e.Suffix != "" {
 			return c.checkIntLiteralSuffix(e)
 		}
-		intType := c.inferIntLiteral(e)
+		intType, _ := c.inferIntLiteral(e)
 		e.Type = intType // save the type for the code generation
 		return intType
 	case *ast.FloatLiteral:
@@ -489,6 +590,23 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 		return symbolType
 	case *ast.BoolLiteral:
 		return symbols.SymbolTypeBool
+	case *ast.ArrayExpression:
+		arrayType := &symbols.ChlangArrayType{
+			ElementType: symbols.SymbolTypeInvalid,
+			Length:      0,
+		}
+		for _, elem := range e.Elements {
+			elemType := c.inferExpression(elem)
+			if arrayType.ElementType == symbols.SymbolTypeInvalid {
+				arrayType.ElementType = elemType
+			} else if arrayType.ElementType != elemType {
+				c.Errors = append(c.Errors, &errors.SemanticError{
+					Message:  fmt.Sprintf("array element type mismatch: expected '%s', but got '%s'", arrayType.ElementType, elemType),
+					Position: elem.GetSpan().Start,
+				})
+			}
+		}
+		return arrayType
 	case *ast.UnaryExpression:
 		rightType := c.inferExpression(e.Right)
 		if rightType == symbols.SymbolTypeInvalid {
@@ -500,7 +618,8 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 		}
 		switch e.Operator.Type {
 		case chToken.MINUS, chToken.PLUS:
-			if !rightType.IsNumeric() {
+			operandType, ok := rightType.(symbols.ChlangPrimitiveType)
+			if !ok || !operandType.IsNumeric() {
 				c.Errors = append(c.Errors, &errors.SemanticError{
 					Message:  fmt.Sprintf("unary operator '%s' requires only numeric operand", e.Operator.Literal),
 					Position: e.Span.Start,
@@ -551,7 +670,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 			return thenType
 		}
 
-		var elseType symbols.SymbolValueType
+		var elseType symbols.ChlangType
 		switch elseBlock := e.ElseBlock.(type) {
 		case *ast.BlockStatement:
 			elseType = c.inferIfBlockStatement(elseBlock)
@@ -569,7 +688,9 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 			return symbols.SymbolTypeInvalid
 		}
 
-		return symbols.GetMaxType(thenType, elseType)
+		// TODO: Refactor this, because it's not a good way to determine the type of the if expression
+		// It's better to return a composite type and check it in the upper level
+		return c.getMaxTypeOf(thenType, elseType)
 	}
 
 	c.Errors = append(c.Errors, &errors.SemanticError{
@@ -578,10 +699,10 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.SymbolValueType {
 	return symbols.SymbolTypeInvalid
 }
 
-func (c *Checker) inferIfBlockStatement(block *ast.BlockStatement) symbols.SymbolValueType {
+func (c *Checker) inferIfBlockStatement(block *ast.BlockStatement) symbols.ChlangType {
 	c.SymbolTable.OpenScope()
 	c.populateSymbolDeclarations(block.Statements)
-	returnType := symbols.SymbolTypeVoid
+	var returnType symbols.ChlangType = symbols.SymbolTypeVoid
 	for _, statement := range block.Statements {
 		switch stmt := statement.(type) {
 		case *ast.ExpressionStatement:
@@ -598,7 +719,7 @@ func (c *Checker) inferIfBlockStatement(block *ast.BlockStatement) symbols.Symbo
 	return returnType
 }
 
-func (c *Checker) inferIntLiteral(node *ast.IntLiteral) symbols.SymbolValueType {
+func (c *Checker) inferIntLiteral(node *ast.IntLiteral) (symbols.ChlangPrimitiveType, int64) {
 	bitSize := 64
 	intValue, err := strconv.ParseInt(node.Value, 0, bitSize)
 	if err != nil {
@@ -606,29 +727,29 @@ func (c *Checker) inferIntLiteral(node *ast.IntLiteral) symbols.SymbolValueType 
 			Message:  fmt.Sprintf("value '%s' is out of integer %d-bit range", node.Value, bitSize),
 			Position: node.Span.Start,
 		})
-		return symbols.SymbolTypeInvalid
+		return symbols.SymbolTypeInvalid, 0
 	}
 
 	if intValue >= -128 && intValue <= 127 {
-		return symbols.SymbolTypeInt8
+		return symbols.SymbolTypeInt8, intValue
 	}
 
 	if intValue >= -32768 && intValue <= 32767 {
-		return symbols.SymbolTypeInt16
+		return symbols.SymbolTypeInt16, intValue
 	}
 
 	if intValue >= -2147483648 && intValue <= 2147483647 {
-		return symbols.SymbolTypeInt32
+		return symbols.SymbolTypeInt32, intValue
 	}
 
 	if intValue >= -9223372036854775808 && intValue <= 9223372036854775807 {
-		return symbols.SymbolTypeInt64
+		return symbols.SymbolTypeInt64, intValue
 	}
 
-	return symbols.SymbolTypeInvalid
+	return symbols.SymbolTypeInvalid, intValue
 }
 
-func (c *Checker) checkIntLiteralSuffix(node *ast.IntLiteral) symbols.SymbolValueType {
+func (c *Checker) checkIntLiteralSuffix(node *ast.IntLiteral) symbols.ChlangPrimitiveType {
 	mode := node.Suffix[0]
 	bitSize, err := strconv.Atoi(node.Suffix[1:])
 
@@ -714,7 +835,7 @@ func (c *Checker) checkIntLiteralSuffix(node *ast.IntLiteral) symbols.SymbolValu
 	return symbols.SymbolTypeInvalid
 }
 
-func (c *Checker) checkTypesCompatibility(a, b symbols.SymbolValueType, operator *chToken.Token) (symbols.SymbolValueType, error) {
+func (c *Checker) checkTypesCompatibility(a, b symbols.ChlangType, operator *chToken.Token) (symbols.ChlangType, error) {
 	switch operator.Type {
 	case chToken.PLUS,
 		chToken.MINUS,
@@ -727,20 +848,23 @@ func (c *Checker) checkTypesCompatibility(a, b symbols.SymbolValueType, operator
 		chToken.CARET,
 		chToken.LEFT_SHIFT,
 		chToken.RIGHT_SHIFT:
-		if a.IsNumeric() && b.IsNumeric() {
+		leftType, leftIsPrimitive := a.(symbols.ChlangPrimitiveType)
+		rightType, rightIsPrimitive := b.(symbols.ChlangPrimitiveType)
+
+		if leftIsPrimitive && rightIsPrimitive && leftType.IsNumeric() && rightType.IsNumeric() {
 			if a == b {
 				return a, nil
 			}
-			if a.IsFloat() || b.IsFloat() {
+			if leftType.IsFloat() || rightType.IsFloat() {
 				return symbols.SymbolTypeFloat64, nil
 			}
 
-			if a.IsSigned() && b.IsSigned() {
-				return symbols.GetMaxType(a, b), nil
+			if leftType.IsSigned() && rightType.IsSigned() {
+				return symbols.GetMaxType(leftType, rightType), nil
 			}
 
-			if a.IsUnsigned() && b.IsUnsigned() {
-				return symbols.GetMaxType(a, b), nil
+			if leftType.IsUnsigned() && rightType.IsUnsigned() {
+				return symbols.GetMaxType(leftType, rightType), nil
 			}
 		}
 
@@ -757,4 +881,16 @@ func (c *Checker) checkTypesCompatibility(a, b symbols.SymbolValueType, operator
 		return symbols.SymbolTypeInvalid, fmt.Errorf("type mismatch: operator '%s' requires operands of the same type (left: %s, right: %s)", operator.Literal, a, b)
 	}
 	return symbols.SymbolTypeInvalid, fmt.Errorf("type mismatch: unknown operator: %s", operator.Literal)
+}
+
+func (c *Checker) getMaxTypeOf(left, right symbols.ChlangType) symbols.ChlangType {
+	leftType, leftIsPrimitive := left.(symbols.ChlangPrimitiveType)
+	rightType, rightIsPrimitive := right.(symbols.ChlangPrimitiveType)
+
+	if leftIsPrimitive && rightIsPrimitive {
+		return symbols.GetMaxType(leftType, rightType)
+	}
+
+	fmt.Printf("[warn]: getMaxTypeOf: unsupported types: %s, %s\n", left, right)
+	return left
 }

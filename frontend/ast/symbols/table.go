@@ -6,24 +6,29 @@ import (
 	"github.com/usein-abilev/chlang/frontend/token"
 )
 
-type SymbolEntityType int
+type symbolEntityType int
 
 // Symbol types for the symbol table
 const (
-	_ SymbolEntityType = iota
-	SymbolTypeVariable
-	SymbolTypeFunction
-	SymbolTypeConstant
+	_ symbolEntityType = iota
+	SymbolEntityVariable
+	SymbolEntityFunction
+	SymbolEntityConstant
+
+	// User defined types
+	SymbolEntityUserDefined
 )
 
-func (t SymbolEntityType) String() string {
+func (t symbolEntityType) String() string {
 	switch t {
-	case SymbolTypeVariable:
+	case SymbolEntityVariable:
 		return "Variable"
-	case SymbolTypeFunction:
+	case SymbolEntityFunction:
 		return "Function"
-	case SymbolTypeConstant:
+	case SymbolEntityConstant:
 		return "Constant"
+	case SymbolEntityUserDefined:
+		return "UserDefined"
 	}
 	return "Unknown"
 }
@@ -31,10 +36,10 @@ func (t SymbolEntityType) String() string {
 type FuncSymbolSignature struct {
 	SpreadArgument bool
 	Args           []*SymbolEntity
-	ReturnType     SymbolValueType
+	ReturnType     ChlangType
 }
 
-// Represents a single symbol in the symbol table
+// Represents a single symbol or type specification in the symbol table (environment)
 type SymbolEntity struct {
 	Name string
 
@@ -42,10 +47,10 @@ type SymbolEntity struct {
 	Used bool
 
 	// The type of the symbol: i32, i64, f64, string, etc.
-	Type SymbolValueType
+	Type ChlangType
 
 	// The type of the entity: variable, function, constant, etc.
-	EntityType SymbolEntityType
+	EntityType symbolEntityType
 
 	// If the symbol is a function,
 	// this field will be contain the function's details

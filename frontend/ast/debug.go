@@ -84,6 +84,46 @@ func (ie FloatLiteral) PrintTree(level int) {
 	fmt.Printf("IntLiteral: %s\n", ie.Value)
 }
 
+func (at ArrayType) PrintTree(level int) {
+	printIndent(level)
+	fmt.Println("ArrayType")
+	printIndent(level + 1)
+	fmt.Println("Type:")
+	at.Type.PrintTree(level + 2)
+	if at.Size != nil {
+		printIndent(level + 1)
+		fmt.Println("Size:")
+		at.Size.PrintTree(level + 2)
+	}
+}
+
+func (ft FunctionType) PrintTree(level int) {
+	printIndent(level)
+	fmt.Println("FunctionType")
+
+	if len(ft.Args) > 0 {
+		printIndent(level + 1)
+		fmt.Println("Args:")
+		for _, arg := range ft.Args {
+			arg.PrintTree(level + 2)
+		}
+	}
+
+	if ft.ReturnType != nil {
+		printIndent(level + 1)
+		fmt.Println("ReturnType:")
+		ft.ReturnType.PrintTree(level + 2)
+	}
+}
+
+func (ie ArrayExpression) PrintTree(level int) {
+	printIndent(level)
+	fmt.Println("ArrayExpression")
+	for _, element := range ie.Elements {
+		element.PrintTree(level + 1)
+	}
+}
+
 func (ie UnaryExpression) PrintTree(level int) {
 	printIndent(level)
 	fmt.Printf("UnaryExp: %s\n", ie.Operator.Literal)
@@ -129,13 +169,29 @@ func (ie IfExpression) PrintTree(level int) {
 	}
 }
 
+func (p TypeDeclarationStatement) PrintTree(level int) {
+	printIndent(level)
+	fmt.Printf("TypeDeclarationStatement: %s\n", p.Name.Value)
+
+	printIndent(level + 1)
+	fmt.Println("Name:")
+	p.Name.PrintTree(level + 2)
+
+	if p.Spec != nil {
+		printIndent(level + 1)
+		fmt.Println("Spec:")
+		p.Spec.PrintTree(level + 2)
+	}
+}
+
 func (p ConstDeclarationStatement) PrintTree(level int) {
 	printIndent(level)
 	fmt.Printf("ConstDeclaration: %s\n", p.Name.Value)
 
 	if p.Type != nil {
 		printIndent(level + 1)
-		fmt.Printf("Type: %s\n", p.Type.Value)
+		fmt.Println("Type:")
+		p.Type.PrintTree(level + 2)
 	}
 
 	if p.Value != nil {
@@ -151,7 +207,8 @@ func (p VarDeclarationStatement) PrintTree(level int) {
 
 	if p.Type != nil {
 		printIndent(level + 1)
-		fmt.Printf("Type: %s\n", p.Type.Value)
+		fmt.Println("Type:")
+		p.Type.PrintTree(level + 2)
 	}
 
 	if p.Value != nil {
@@ -225,13 +282,15 @@ func (fds FuncDeclarationStatement) PrintTree(level int) {
 
 	if fds.ReturnType != nil {
 		printIndent(level + 1)
-		fmt.Printf("ReturnType: %s\n", fds.ReturnType.Value)
+		fmt.Println("ReturnType:")
+		fds.ReturnType.PrintTree(level + 2)
 	}
 }
 
 func (fa FuncArgument) PrintTree(level int) {
 	printIndent(level)
-	fmt.Printf("FuncArgument: %s, Type: %s\n", fa.Name.Value, fa.Type.Value)
+	fmt.Printf("FuncArgument: %s, Type:\n", fa.Name.Value)
+	fa.Type.PrintTree(level + 1)
 }
 
 func (bl BlockStatement) PrintTree(level int) {

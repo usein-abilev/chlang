@@ -103,6 +103,8 @@ func (g *RVMGenerator) emitStatement(statement ast.Statement) {
 		g.function.addConstant(statement.Name.Value, value)
 	case *ast.VarDeclarationStatement:
 		g.visitVarDeclaration(statement)
+	case *ast.TypeDeclarationStatement:
+		return // ignore type declarations
 	case *ast.FuncDeclarationStatement:
 		g.visitFuncDeclaration(statement)
 	case *ast.ForRangeStatement:

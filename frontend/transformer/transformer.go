@@ -35,7 +35,7 @@ func evaluateConstant(rawNode ast.Node) ast.Node {
 		left := evaluateConstant(node.Left)
 		right := evaluateConstant(node.Right)
 
-		if ast.IsConstantASTNode(left) && ast.IsConstantASTNode(right) {
+		if ast.IsLiteralASTNode(left) && ast.IsLiteralASTNode(right) {
 			leftNode, leftIsInt := left.(*ast.IntLiteral)
 			rightNode, rightIsInt := right.(*ast.IntLiteral)
 

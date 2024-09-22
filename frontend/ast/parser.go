@@ -62,6 +62,8 @@ func (p *Parser) parseStatement() Statement {
 		return p.parseVarStatement()
 	case chToken.CONST:
 		return p.parseConstStatement()
+	case chToken.TYPE:
+		return p.parseTypeStatement()
 	case chToken.IF:
 		expr := p.parseIfExpression()
 		if expr == nil {
@@ -251,14 +253,29 @@ func (p *Parser) parseConstStatement() *ConstDeclarationStatement {
 	}
 }
 
+func (p *Parser) parseTypeStatement() *TypeDeclarationStatement {
+	typeToken := p.consume(chToken.TYPE)
+	identifier := p.parseIdentifier()
+	p.consume(chToken.ASSIGN)
+	spec := p.parseTypeSpec()
+	return &TypeDeclarationStatement{
+		Span: chToken.Span{
+			Start: typeToken.Position,
+			End:   p.current.Position,
+		},
+		Name: identifier,
+		Spec: spec,
+	}
+}
+
 func (p *Parser) parseVarStatement() *VarDeclarationStatement {
 	letToken := p.consume(chToken.VAR)
 	identifier := p.parseIdentifier()
 
-	var varType *Identifier
+	var varType Expression
 	if p.current.Type == chToken.COLON {
 		p.consume(chToken.COLON)
-		varType = p.parseIdentifier()
+		varType = p.parseTypeSpec()
 	}
 	var expression Expression
 	if p.current.Type == chToken.ASSIGN {
@@ -450,6 +467,22 @@ func (p *Parser) parsePrimary() Expression {
 		expression := p.parseExpression()
 		p.consume(chToken.RIGHT_PAREN)
 		return expression
+	case chToken.LEFT_BRACKET:
+		expr := &ArrayExpression{Span: chToken.Span{Start: startExprPos}}
+		p.consume(chToken.LEFT_BRACKET)
+
+		for p.current.Type != chToken.RIGHT_BRACKET {
+			element := p.parseExpression()
+			expr.Elements = append(expr.Elements, element)
+			if p.current.Type == chToken.COMMA {
+				p.consume(chToken.COMMA)
+			}
+		}
+
+		rightBracket := p.consume(chToken.RIGHT_BRACKET)
+		expr.Span.End = rightBracket.Position
+
+		return expr
 	case chToken.PLUS, chToken.MINUS, chToken.BANG:
 		op := p.consume(p.current.Type)
 		expression := p.parsePrimary()
@@ -465,6 +498,82 @@ func (p *Parser) parsePrimary() Expression {
 		ErrorLine: p.lexer.GetLineByPosition(previous.Position),
 		Message:   fmt.Sprintf("expected expression, but got '%s'", previous.Literal),
 		Help:      "expected a primary expression",
+	})
+	return nil
+}
+
+func (p *Parser) parseTypeSpec() Expression {
+	start := p.current.Position
+	primary := p.parseTypePrimary()
+
+	for p.current.Type == chToken.LEFT_BRACKET {
+		arrayType := &ArrayType{Type: primary, Span: chToken.Span{Start: start}}
+		p.consume(chToken.LEFT_BRACKET)
+		if p.current.Type == chToken.INT_LITERAL {
+			arrayType.Size = p.parseExpression()
+		}
+		p.consume(chToken.RIGHT_BRACKET)
+
+		primary = arrayType
+
+		// parse array type if there is another left bracket
+		if p.current.Type == chToken.LEFT_BRACKET {
+			start = p.current.Position
+		}
+	}
+
+	return primary
+}
+
+func (p *Parser) parseTypePrimary() Expression {
+	switch p.current.Type {
+	case chToken.IDENTIFIER:
+		return p.parseIdentifier()
+	case chToken.LEFT_PAREN: // function or group
+		startDelimiter := p.consume(chToken.LEFT_PAREN)
+
+		var args []Expression
+		for p.current.Type != chToken.RIGHT_PAREN {
+			spec := p.parseTypeSpec()
+			if spec == nil {
+				return &BadExpression{}
+			}
+			args = append(args, spec)
+			if p.current.Type == chToken.COMMA {
+				p.consume(chToken.COMMA)
+			}
+		}
+		p.consume(chToken.RIGHT_PAREN)
+
+		// parse function type if there is an arrow
+		if p.current.Type == chToken.ARROW {
+			p.consume(chToken.ARROW)
+			returnType := p.parseTypeSpec()
+			return &FunctionType{
+				Span:       chToken.Span{Start: startDelimiter.Position, End: p.current.Position},
+				Args:       args,
+				ReturnType: returnType,
+			}
+		}
+
+		if len(args) == 1 {
+			return args[0]
+		}
+
+		p.reportError(&compilerError.SyntaxError{
+			Position:  p.current.Position,
+			ErrorLine: p.lexer.GetLineByPosition(p.current.Position),
+			Message:   "invalid syntax, expected function or group",
+			Help:      "expected a function type or grouping",
+		})
+		return nil
+	}
+
+	p.reportError(&compilerError.SyntaxError{
+		Position:  p.current.Position,
+		ErrorLine: p.lexer.GetLineByPosition(p.current.Position),
+		Message:   fmt.Sprintf("expected type, but got '%s'", p.current.Literal),
+		Help:      "expected a type specification",
 	})
 	return nil
 }
@@ -485,7 +594,12 @@ func parseNumberLiteralSuffix(s string) (literal, suffix string, err error) {
 
 func (p *Parser) expect(t chToken.TokenType) bool {
 	if p.current.Type != t {
-		message := fmt.Sprintf("Unexpected token, expected '%s', but got '%s'", chToken.TokenSymbolName(t), chToken.TokenSymbolName(p.current.Type))
+		message := fmt.Sprintf(
+			"Unexpected token, expected '%s', but got '%s':\n\t%s",
+			chToken.TokenSymbolName(t),
+			chToken.TokenSymbolName(p.current.Type),
+			p.lexer.GetLineByPosition(p.current.Position),
+		)
 		p.reportError(&compilerError.SyntaxError{
 			Position:  p.current.Position,
 			ErrorLine: p.lexer.GetLineByPosition(p.current.Position),
@@ -517,8 +631,6 @@ func (p *Parser) expectOneOf(types ...chToken.TokenType) bool {
 		Message:   "unexpected token",
 		Help:      fmt.Sprintf("expected one of %s", strings.Join(typesString, ", ")),
 	})
-
-	fmt.Printf("expected one of %s, but got '%s' at %s", strings.Join(typesString, ", "), p.current.Literal, p.current.Position)
 
 	return false
 }

@@ -10,6 +10,7 @@ type (
 	Node interface {
 		Node()
 		PrintTree(level int)
+		GetSpan() *token.Span
 	}
 	Statement interface {
 		Node
@@ -44,7 +45,7 @@ type (
 		Span token.Span
 
 		// Type is determined during type checking
-		Type symbols.SymbolValueType
+		Type symbols.ChlangPrimitiveType
 
 		Value  string
 		Suffix string // type suffix: i8, i16, i32, i64, u8, u16, u32, u64
@@ -54,7 +55,7 @@ type (
 		Span token.Span
 
 		// Type is determined during type checking
-		Type symbols.SymbolValueType
+		Type symbols.ChlangPrimitiveType
 
 		Suffix string // type suffix: f32, f64
 		Value  string
@@ -68,6 +69,24 @@ type (
 		Start     Expression
 		End       Expression
 		Inclusive bool
+	}
+
+	// Types nodes
+	ArrayType struct {
+		Span token.Span
+		Type Expression
+		Size Expression
+	}
+	FunctionType struct {
+		Span       token.Span
+		Args       []Expression
+		ReturnType Expression
+	}
+
+	// Expressions
+	ArrayExpression struct {
+		Span     token.Span
+		Elements []Expression
 	}
 	UnaryExpression struct {
 		Span     token.Span
@@ -106,12 +125,12 @@ type (
 		Name       *Identifier
 		Params     []*FuncArgument
 		Body       *BlockStatement
-		ReturnType *Identifier
 		Symbol     *symbols.SymbolEntity
+		ReturnType Expression
 	}
 	FuncArgument struct {
 		Name *Identifier
-		Type *Identifier
+		Type Expression
 	}
 	BlockStatement struct {
 		Span       token.Span
@@ -133,11 +152,16 @@ type (
 	ContinueStatement struct {
 		Span token.Span
 	}
+	TypeDeclarationStatement struct {
+		Span token.Span
+		Name *Identifier
+		Spec Expression // type specification
+	}
 	ConstDeclarationStatement struct {
 		Span       token.Span
 		ConstToken *token.Token
 		Name       *Identifier
-		Type       *Identifier
+		Type       Expression
 		Value      Expression
 		Symbol     *symbols.SymbolEntity
 	}
@@ -145,11 +169,15 @@ type (
 		Span     token.Span
 		LetToken *token.Token
 		Name     *Identifier
-		Type     *Identifier
+		Type     Expression
 		Value    Expression
 		Symbol   *symbols.SymbolEntity
 	}
 )
+
+// type nodes
+func (ArrayType) Node()    {}
+func (FunctionType) Node() {}
 
 func (Range) Node()                     {}
 func (Identifier) Node()                {}
@@ -157,6 +185,7 @@ func (IntLiteral) Node()                {}
 func (BoolLiteral) Node()               {}
 func (FloatLiteral) Node()              {}
 func (StringLiteral) Node()             {}
+func (ArrayExpression) Node()           {}
 func (UnaryExpression) Node()           {}
 func (BinaryExpression) Node()          {}
 func (AssignExpression) Node()          {}
@@ -168,17 +197,97 @@ func (ReturnStatement) Node()           {}
 func (ForRangeStatement) Node()         {}
 func (BreakStatement) Node()            {}
 func (ContinueStatement) Node()         {}
+func (TypeDeclarationStatement) Node()  {}
 func (VarDeclarationStatement) Node()   {}
 func (ConstDeclarationStatement) Node() {}
 func (FuncDeclarationStatement) Node()  {}
 
+func (e *ArrayType) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *FunctionType) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *Range) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *Identifier) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *IntLiteral) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *BoolLiteral) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *FloatLiteral) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *StringLiteral) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *ArrayExpression) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *UnaryExpression) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *BinaryExpression) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *AssignExpression) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *CallExpression) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *BlockStatement) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *IfExpression) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *ExpressionStatement) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *ReturnStatement) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *ForRangeStatement) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *BreakStatement) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *ContinueStatement) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *TypeDeclarationStatement) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *VarDeclarationStatement) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *ConstDeclarationStatement) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *FuncDeclarationStatement) GetSpan() *token.Span {
+	return &e.Span
+}
+
 // BadExpression are used to represent a syntax error w/o halting the parser
 func (BadExpression) Node() {}
+func (be *BadExpression) GetSpan() *token.Span {
+	return &be.Span
+}
 
 // BadStatement are used to represent a syntax error w/o halting the parser
 func (BadStatement) Node() {}
+func (be *BadStatement) GetSpan() *token.Span {
+	return &be.Span
+}
 
-func IsConstantASTNode(node Node) bool {
+func IsLiteralASTNode(node Node) bool {
 	switch node.(type) {
 	case *IntLiteral, *FloatLiteral, *BoolLiteral, *StringLiteral:
 		return true
