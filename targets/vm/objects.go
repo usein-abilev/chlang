@@ -12,6 +12,7 @@ const (
 	OperandTypeFloat64
 	OperandTypeBool
 	OperandTypeString
+	OperandTypeArray
 	OperandTypeFunctionObject
 	OperandTypeBuildInFunction
 )
@@ -47,6 +48,8 @@ func (ovt OperandValueType) String() string {
 		return "bool"
 	case OperandTypeString:
 		return "string"
+	case OperandTypeArray:
+		return "array"
 	case OperandTypeFunctionObject:
 		return "function"
 	case OperandTypeBuildInFunction:

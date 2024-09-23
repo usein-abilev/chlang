@@ -267,23 +267,7 @@ func (c *Checker) visitVarDeclaration(stmt *ast.VarDeclarationStatement) {
 	if stmt.Value != nil {
 		varType = c.inferExpression(stmt.Value)
 		if stmt.Type == nil {
-			if ty, ok := varType.(symbols.ChlangPrimitiveType); ok {
-				if ty.IsFloat() {
-					varType = symbols.SymbolTypeFloat64
-				}
-				if ty.IsUnsigned() {
-					varType = symbols.GetMaxType(symbols.SymbolTypeUint32, ty)
-				}
-				if ty.IsSigned() {
-					varType = symbols.GetMaxType(symbols.SymbolTypeInt32, ty)
-				}
-			} else {
-				c.Errors = append(c.Errors, &errors.SemanticError{
-					Message:  "unsupported type for variable declaration",
-					Position: stmt.Span.Start,
-				})
-				return
-			}
+			varType = c.getGeneralTypeOf(varType)
 		} else {
 			typeTag := c.convertASTType(stmt.Type)
 			if !symbols.IsLeftCompatibleType(typeTag, varType) {
@@ -473,7 +457,10 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.ChlangType {
 		}
 
 		if chToken.IsAssignment(e.Operator.Type) {
-			if _, ok := e.Left.(*ast.Identifier); !ok {
+			switch e.Left.(type) {
+			case *ast.Identifier:
+			case *ast.IndexExpression:
+			default:
 				c.Errors = append(c.Errors, &errors.SemanticError{
 					Message:  "left side of an assignment must be an identifier",
 					Position: e.Span.Start,
@@ -593,7 +580,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.ChlangType {
 	case *ast.ArrayExpression:
 		arrayType := &symbols.ChlangArrayType{
 			ElementType: symbols.SymbolTypeInvalid,
-			Length:      0,
+			Length:      len(e.Elements),
 		}
 		for _, elem := range e.Elements {
 			elemType := c.inferExpression(elem)
@@ -605,8 +592,22 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.ChlangType {
 					Position: elem.GetSpan().Start,
 				})
 			}
+			arrayType.ElementType = c.getMaxTypeOf(arrayType.ElementType, elemType)
 		}
 		return arrayType
+	case *ast.IndexExpression:
+		arrayType := c.inferExpression(e.Left)
+		if arrayType == symbols.SymbolTypeInvalid {
+			return symbols.SymbolTypeInvalid
+		}
+		if arrayType, ok := arrayType.(*symbols.ChlangArrayType); ok {
+			return arrayType.ElementType
+		}
+		c.Errors = append(c.Errors, &errors.SemanticError{
+			Message:  fmt.Sprintf("index operator applied to non-array type '%s'", arrayType),
+			Position: e.Span.Start,
+		})
+		return symbols.SymbolTypeInvalid
 	case *ast.UnaryExpression:
 		rightType := c.inferExpression(e.Right)
 		if rightType == symbols.SymbolTypeInvalid {
@@ -694,9 +695,32 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.ChlangType {
 	}
 
 	c.Errors = append(c.Errors, &errors.SemanticError{
-		Message: fmt.Sprintf("type infer: unknown expression type: %T", expr),
+		Message:  fmt.Sprintf("type infer: unknown expression type: %T", expr),
+		Span:     *expr.GetSpan(),
+		Position: expr.GetSpan().Start,
 	})
 	return symbols.SymbolTypeInvalid
+}
+
+// getGeneralTypeOf returns the minimal general type of the type
+// For example, if the types are i8 the general type will be i32 (because all integer variables by default is the i32)
+// Same behavior for the complex types, the array of i8 will be the array of i32
+func (c *Checker) getGeneralTypeOf(exprType symbols.ChlangType) symbols.ChlangType {
+	switch ty := exprType.(type) {
+	case symbols.ChlangPrimitiveType:
+		if ty.IsFloat() {
+			exprType = symbols.SymbolTypeFloat64
+		}
+		if ty.IsUnsigned() {
+			exprType = symbols.GetMaxType(symbols.SymbolTypeUint32, ty)
+		}
+		if ty.IsSigned() {
+			exprType = symbols.GetMaxType(symbols.SymbolTypeInt32, ty)
+		}
+	case *symbols.ChlangArrayType:
+		ty.ElementType = c.getGeneralTypeOf(ty.ElementType)
+	}
+	return exprType
 }
 
 func (c *Checker) inferIfBlockStatement(block *ast.BlockStatement) symbols.ChlangType {

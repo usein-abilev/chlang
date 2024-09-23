@@ -364,6 +364,21 @@ func (p *Parser) parseBinaryExpression(min int) Expression {
 	spanStart := p.current.Position
 	left := p.parsePrimary()
 
+	// parse index expression if there is a left bracket after the primary expression
+	if p.current.Type == chToken.LEFT_BRACKET {
+		p.consume(chToken.LEFT_BRACKET)
+		index := p.parseExpression()
+		p.consume(chToken.RIGHT_BRACKET)
+		left = &IndexExpression{
+			Span: chToken.Span{
+				Start: spanStart,
+				End:   p.current.Position,
+			},
+			Left:  left,
+			Index: index,
+		}
+	}
+
 	// parse assignment expression
 	if chToken.IsAssignment(p.current.Type) {
 		op := p.consume(p.current.Type)

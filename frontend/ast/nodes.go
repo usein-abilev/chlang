@@ -88,6 +88,11 @@ type (
 		Span     token.Span
 		Elements []Expression
 	}
+	IndexExpression struct {
+		Span  token.Span
+		Left  Expression
+		Index Expression
+	}
 	UnaryExpression struct {
 		Span     token.Span
 		Operator *token.Token
@@ -186,6 +191,7 @@ func (BoolLiteral) Node()               {}
 func (FloatLiteral) Node()              {}
 func (StringLiteral) Node()             {}
 func (ArrayExpression) Node()           {}
+func (IndexExpression) Node()           {}
 func (UnaryExpression) Node()           {}
 func (BinaryExpression) Node()          {}
 func (AssignExpression) Node()          {}
@@ -227,6 +233,9 @@ func (e *StringLiteral) GetSpan() *token.Span {
 	return &e.Span
 }
 func (e *ArrayExpression) GetSpan() *token.Span {
+	return &e.Span
+}
+func (e *IndexExpression) GetSpan() *token.Span {
 	return &e.Span
 }
 func (e *UnaryExpression) GetSpan() *token.Span {

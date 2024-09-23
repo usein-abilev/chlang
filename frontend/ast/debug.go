@@ -124,6 +124,17 @@ func (ie ArrayExpression) PrintTree(level int) {
 	}
 }
 
+func (idx IndexExpression) PrintTree(level int) {
+	printIndent(level)
+	fmt.Println("IndexExpression")
+	printIndent(level + 1)
+	fmt.Println("Array:")
+	idx.Left.PrintTree(level + 2)
+	printIndent(level + 1)
+	fmt.Println("Index:")
+	idx.Index.PrintTree(level + 2)
+}
+
 func (ie UnaryExpression) PrintTree(level int) {
 	printIndent(level)
 	fmt.Printf("UnaryExp: %s\n", ie.Operator.Literal)

@@ -314,19 +314,29 @@ func (g *RVMGenerator) emitExpression(expression ast.Expression) RegisterAddress
 
 		return calleeReg
 	case *ast.AssignExpression:
-		leftReg := g.emitExpression(expr.Left)
-		if opcode, ok := mappedAssignOperatorsToOpcodes[expr.Operator.Type]; ok {
+		opcode, ok := mappedAssignOperatorsToOpcodes[expr.Operator.Type]
+		if !ok {
+			panic(fmt.Sprintf("unknown assign expression operator '%s'", expr.Operator.Literal))
+		}
+
+		rightReg := g.emitExpression(expr.Right)
+		switch leftExpr := expr.Left.(type) {
+		case *ast.Identifier:
+			leftReg := g.emitExpression(expr.Left)
 			if expr.Operator.Type == token.ASSIGN {
-				rightReg := g.emitExpression(expr.Right)
 				g.function.emit(OpcodeMove, leftReg, rightReg)
 				return leftReg
 			}
-			rightReg := g.emitExpression(expr.Right)
 			g.function.emit(opcode, leftReg, leftReg, rightReg)
 			return leftReg
+		case *ast.IndexExpression:
+			arrayReg := g.emitExpression(leftExpr.Left)
+			indexReg := g.emitExpression(leftExpr.Index)
+			g.function.emit(OpcodeArraySet, arrayReg, indexReg, rightReg)
+			return arrayReg
+		default:
+			panic(fmt.Sprintf("error: invalid left expression type: %T", leftExpr))
 		}
-
-		panic(fmt.Sprintf("unknown assign expression operator '%s'", expr.Operator.Literal))
 	case *ast.BinaryExpression:
 		targetReg := g.function.addTemp()
 
@@ -341,6 +351,20 @@ func (g *RVMGenerator) emitExpression(expression ast.Expression) RegisterAddress
 		}
 
 		panic(fmt.Sprintf("error: unknown operator '%s'", expr.Operator.Literal))
+	case *ast.ArrayExpression:
+		arrayReg := g.function.addTemp()
+		g.function.emit(OpcodeAllocArray, arrayReg, len(expr.Elements))
+		for i, element := range expr.Elements {
+			elementReg := g.emitExpression(element)
+			g.function.emit(OpcodeArraySet, arrayReg, i, elementReg)
+		}
+		return arrayReg
+	case *ast.IndexExpression:
+		tempReg := g.function.addTemp()
+		arrayReg := g.emitExpression(expr.Left)
+		indexReg := g.emitExpressionAligned(expr.Index)
+		g.function.emit(OpcodeArrayGet, tempReg, arrayReg, indexReg)
+		return tempReg
 	case *ast.IntLiteral:
 		targetReg := g.function.addTemp()
 		g.function.emit(OpcodeLoadConst, targetReg, g.function.emitConstantValue(getOperandValueFromConstant(expr)))

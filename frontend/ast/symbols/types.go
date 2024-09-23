@@ -60,7 +60,8 @@ func IsLeftCompatibleType(left, right ChlangType) bool {
 		}
 	case *ChlangArrayType:
 		if rightArray, ok := right.(*ChlangArrayType); ok {
-			return IsLeftCompatibleType(leftType.ElementType, rightArray.ElementType)
+			return IsLeftCompatibleType(leftType.ElementType, rightArray.ElementType) &&
+				(leftType.Length == rightArray.Length || leftType.Length == 0)
 		}
 	}
 

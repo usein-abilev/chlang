@@ -124,6 +124,41 @@ main_loop:
 			value := operands[1].(ConstantValueIdx)
 			constant := vm.callRecord.function.constants[value]
 			vm.setStackValue(base+target, constant.Value)
+		case OpcodeAllocArray:
+			target := operands[0].(RegisterAddress)
+			size := operands[1].(int)
+			array := make([]OperandValue, size)
+			vm.setStackValue(base+target, &OperandValue{
+				Kind:  OperandTypeArray,
+				Value: array,
+			})
+		case OpcodeArraySet:
+			arrayReg := operands[0].(RegisterAddress)
+			var position int
+			switch operands[1].(type) {
+			case RegisterAddress:
+				position = int(vm.stack[base+operands[1].(RegisterAddress)].Value.(int64))
+			case int:
+				position = operands[1].(int)
+			}
+			valueReg := operands[2].(RegisterAddress)
+			arraySlot := vm.stack[base+arrayReg]
+			if arraySlot.Kind != OperandTypeArray {
+				panic(fmt.Sprintf("vm: invalid operand type '%s' for array set", arraySlot.Kind))
+			}
+			array := arraySlot.Value.([]OperandValue)
+			array[position] = vm.stack[base+valueReg]
+		case OpcodeArrayGet:
+			targetReg := operands[0].(RegisterAddress)
+			arrayReg := operands[1].(RegisterAddress)
+			positionReg := operands[2].(RegisterAddress)
+			arraySlot := vm.stack[base+arrayReg]
+			if arraySlot.Kind != OperandTypeArray {
+				panic(fmt.Sprintf("vm: invalid operand type '%s' for array get", arraySlot.Kind))
+			}
+			array := arraySlot.Value.([]OperandValue)
+			pos := vm.stack[base+positionReg].Value.(int64)
+			vm.setStackValue(base+targetReg, &array[pos])
 		case OpcodeLoadString:
 			target := operands[0].(RegisterAddress)
 			value := operands[1].(string)

@@ -22,6 +22,15 @@ const (
 	// Loads immediate 32-bit signed integer to register R(x)
 	OpcodeLoadImm32 // R(x) = y, LoadImm4 x y
 
+	// Allocates array to register R(x)
+	OpcodeAllocArray // R(x) = [1, 2, 3, 4, 5]
+
+	// Sets the value of an array element
+	OpcodeArraySet // ArraySet R(array_reg), (R(index) | R(index_reg)), R(value_reg)
+
+	// Gets the value of an array element
+	OpcodeArrayGet // ArrayGet R(array_reg), R(index), R(value_reg)
+
 	// Adds two registers and stores the result in register R(x)
 	OpcodeAdd // R(x) = R(y) + R(z), AddInt4 x y z
 
@@ -101,6 +110,9 @@ var opcodeNames = map[Opcode]string{
 	OpcodeLoadBool:   "LoadBool",
 	OpcodeLoadConst:  "LoadConst",
 	OpcodeLoadString: "LoadString",
+	OpcodeAllocArray: "AllocArray",
+	OpcodeArraySet:   "ArraySet",
+	OpcodeArrayGet:   "ArrayGet",
 	OpcodeAdd:        "Add",
 	OpcodeSub:        "Sub",
 	OpcodeMul:        "Mul",

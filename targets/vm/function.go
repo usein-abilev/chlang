@@ -2,6 +2,7 @@ package vm
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -203,7 +204,8 @@ func (fn *FunctionObject) printInstructions() {
 	opcodeWidth := 10
 	operandWidth := 3
 	for i, instruction := range fn.instructions {
-		fmt.Printf("\t%v: \033[36m%v\033[0m%s", i, instruction.opcode, strings.Repeat(" ", opcodeWidth-len(instruction.opcode.String())))
+		maxWidth := int(math.Max(0, float64(opcodeWidth-len(instruction.opcode.String()))))
+		fmt.Printf("\t%v: \033[36m%v\033[0m%s", i, instruction.opcode, strings.Repeat(" ", maxWidth))
 		lastOperandIdx := len(instruction.operands) - 1
 		for idx, operand := range instruction.operands {
 			fmt.Printf("%s", strings.Repeat(" ", operandWidth))
