@@ -13,7 +13,7 @@ The register-based code can be used as an intermediate representation to generat
 - [x] Function calls
 - [x] Control structures (if, while, for)
 - [ ] Modules and packages
-- [ ] Complex types (redesign type system and type environment)
+- [x] Complex types (redesign type system and type environment)
 - [ ] Data structures (arrays, vectors, user-defined structures)
 - [x] Interpreter for register-based virtual machine
 
