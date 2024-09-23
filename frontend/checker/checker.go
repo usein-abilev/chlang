@@ -173,7 +173,7 @@ func (c *Checker) convertASTType(spec ast.Expression) symbols.ChlangType {
 		}
 		return symbol.Type
 	case *ast.ArrayType:
-		arrayType := symbols.ChlangArrayType{
+		arrayType := &symbols.ChlangArrayType{
 			ElementType: c.convertASTType(s.Type),
 		}
 		if s.Size != nil {
@@ -549,7 +549,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.ChlangType {
 			fmt.Printf("[warn]: Type checking of the spread arguments not implemented! Ignoring type check for function '%s'.\n", sym.Name)
 		}
 		sym.Used = true
-		return sym.Type
+		return sym.Function.ReturnType
 	case *ast.StringLiteral:
 		return symbols.SymbolTypeString
 	case *ast.IntLiteral:
@@ -599,7 +599,7 @@ func (c *Checker) inferExpression(expr ast.Expression) symbols.ChlangType {
 			elemType := c.inferExpression(elem)
 			if arrayType.ElementType == symbols.SymbolTypeInvalid {
 				arrayType.ElementType = elemType
-			} else if arrayType.ElementType != elemType {
+			} else if !symbols.IsCompatibleType(arrayType.ElementType, elemType) {
 				c.Errors = append(c.Errors, &errors.SemanticError{
 					Message:  fmt.Sprintf("array element type mismatch: expected '%s', but got '%s'", arrayType.ElementType, elemType),
 					Position: elem.GetSpan().Start,

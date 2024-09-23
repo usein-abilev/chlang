@@ -188,23 +188,29 @@ func (p *Parser) parseFunStatement() *FuncDeclarationStatement {
 	params := p.parseFnParameters()
 	p.consume(chToken.RIGHT_PAREN)
 
+	funcDeclaration := &FuncDeclarationStatement{
+		Name:   identifier,
+		Params: params,
+		Span: chToken.Span{
+			Start: funToken.Position,
+			End:   p.current.Position,
+		},
+	}
+
 	var returnType *Identifier
 	if p.current.Type == chToken.ARROW {
 		p.consume(chToken.ARROW)
 		p.expect(chToken.IDENTIFIER)
 		returnType = p.parseIdentifier()
 	}
-	body := p.parseBlockStatement()
-	return &FuncDeclarationStatement{
-		Name:       identifier,
-		Params:     params,
-		Body:       body,
-		ReturnType: returnType,
-		Span: chToken.Span{
-			Start: funToken.Position,
-			End:   p.current.Position,
-		},
+
+	funcDeclaration.Body = p.parseBlockStatement()
+
+	if returnType != nil {
+		funcDeclaration.ReturnType = returnType
 	}
+
+	return funcDeclaration
 }
 
 func (p *Parser) parseFnParameters() []*FuncArgument {
@@ -471,12 +477,17 @@ func (p *Parser) parsePrimary() Expression {
 		expr := &ArrayExpression{Span: chToken.Span{Start: startExprPos}}
 		p.consume(chToken.LEFT_BRACKET)
 
+		p.skipWhile(chToken.NEW_LINE)
 		for p.current.Type != chToken.RIGHT_BRACKET {
 			element := p.parseExpression()
+			if element == nil {
+				continue
+			}
 			expr.Elements = append(expr.Elements, element)
 			if p.current.Type == chToken.COMMA {
 				p.consume(chToken.COMMA)
 			}
+			p.skipWhile(chToken.NEW_LINE)
 		}
 
 		rightBracket := p.consume(chToken.RIGHT_BRACKET)

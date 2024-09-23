@@ -49,13 +49,18 @@ func IsLeftCompatibleType(left, right ChlangType) bool {
 		return true
 	}
 
-	leftPrimitive, leftIsPrimitive := left.(ChlangPrimitiveType)
-	rightPrimitive, rightIsPrimitive := right.(ChlangPrimitiveType)
-	if leftIsPrimitive && rightIsPrimitive {
-		if (leftPrimitive.IsFloat() && rightPrimitive.IsFloat()) ||
-			(leftPrimitive.IsSigned() && rightPrimitive.IsSigned()) ||
-			(leftPrimitive.IsUnsigned() && rightPrimitive.IsUnsigned()) {
-			return leftPrimitive >= rightPrimitive
+	switch leftType := left.(type) {
+	case ChlangPrimitiveType:
+		if rightPrimitive, ok := right.(ChlangPrimitiveType); ok {
+			if (leftType.IsFloat() && rightPrimitive.IsFloat()) ||
+				(leftType.IsSigned() && rightPrimitive.IsSigned()) ||
+				(leftType.IsUnsigned() && rightPrimitive.IsUnsigned()) {
+				return leftType >= rightPrimitive
+			}
+		}
+	case *ChlangArrayType:
+		if rightArray, ok := right.(*ChlangArrayType); ok {
+			return IsLeftCompatibleType(leftType.ElementType, rightArray.ElementType)
 		}
 	}
 
@@ -68,11 +73,29 @@ func IsCompatibleType(left, right ChlangType) bool {
 		return true
 	}
 
-	leftPrimitive, leftIsPrimitive := left.(*ChlangPrimitiveType)
-	rightPrimitive, rightIsPrimitive := right.(*ChlangPrimitiveType)
-	if leftIsPrimitive && rightIsPrimitive {
-		if leftPrimitive.IsNumeric() && rightPrimitive.IsNumeric() {
-			return true
+	switch leftType := left.(type) {
+	case ChlangPrimitiveType:
+		if rightPrimitive, ok := right.(ChlangPrimitiveType); ok {
+			if leftType.IsNumeric() && rightPrimitive.IsNumeric() {
+				return true
+			}
+		}
+	case *ChlangArrayType:
+		if rightArray, ok := right.(*ChlangArrayType); ok {
+			return IsCompatibleType(leftType.ElementType, rightArray.ElementType) &&
+				(leftType.Length == rightArray.Length || leftType.Length == 0 || rightArray.Length == 0)
+		}
+	case *ChlangFunctionType:
+		if rightFunction, ok := right.(*ChlangFunctionType); ok {
+			if len(leftType.Args) != len(rightFunction.Args) {
+				return false
+			}
+			for i, arg := range leftType.Args {
+				if !IsCompatibleType(arg, rightFunction.Args[i]) {
+					return false
+				}
+			}
+			return IsCompatibleType(leftType.Return, rightFunction.Return)
 		}
 	}
 
