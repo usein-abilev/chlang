@@ -64,6 +64,9 @@ const (
 	STRUCT
 	CONST
 	TYPE
+	TRAIT
+	IMPL
+	BY // used in the 'impl' statement to specify the trait that is being implemented
 	FUNCTION
 	RETURN
 	IF
@@ -104,6 +107,10 @@ type TokenMetadata struct {
 type Span struct {
 	Start TokenPosition
 	End   TokenPosition
+}
+
+func (s Span) String() string {
+	return fmt.Sprintf("%s - %s", s.Start, s.End)
 }
 
 // tokenSymbolNames maps token types to their string representation (for debugging purposes)
@@ -162,6 +169,9 @@ var tokenSymbolNames = map[TokenType]string{
 	STRUCT:   "struct",
 	CONST:    "const",
 	TYPE:     "type",
+	TRAIT:    "trait",
+	IMPL:     "impl",
+	BY:       "by",
 	FUNCTION: "fn",
 	RETURN:   "return",
 	IF:       "if",
@@ -271,6 +281,9 @@ var identTokens = map[string]TokenType{
 	"let":      VAR,
 	"const":    CONST,
 	"type":     TYPE,
+	"trait":    TRAIT,
+	"impl":     IMPL,
+	"by":       BY,
 	"struct":   STRUCT,
 	"fn":       FUNCTION,
 	"return":   RETURN,
