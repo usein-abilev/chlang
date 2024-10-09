@@ -64,6 +64,12 @@ func (p *Parser) parseStatement() Statement {
 		return p.parseConstStatement()
 	case chToken.TYPE:
 		return p.parseTypeStatement()
+	case chToken.STRUCT:
+		return p.parseStructStatement()
+	case chToken.TRAIT:
+		return p.parseTraitStatement()
+	case chToken.IMPL:
+		return p.parseImplStatement()
 	case chToken.IF:
 		expr := p.parseIfExpression()
 		if expr == nil {
@@ -79,7 +85,7 @@ func (p *Parser) parseStatement() Statement {
 
 		p.consume(chToken.IN)
 
-		rangeNode := &Range{Inclusive: false, Span: chToken.Span{Start: p.current.Position}}
+		rangeNode := &RangeExpr{Inclusive: false, Span: &chToken.Span{Start: p.current.Position}}
 		rangeNode.Start = p.parseExpression()
 		p.expectOneOf(chToken.DOT_DOT, chToken.DOT_DOT_EQUAL)
 		operator := p.consume(p.current.Type)
@@ -87,26 +93,25 @@ func (p *Parser) parseStatement() Statement {
 			rangeNode.Inclusive = true
 		}
 		rangeNode.Span.End = p.current.Position
-
 		rangeNode.End = p.parseExpression()
 
 		block := p.parseBlockStatement()
 
 		return &ForRangeStatement{
-			Span:       chToken.Span{Start: forToken.Position, End: p.current.Position},
+			Span:       &chToken.Span{Start: forToken.Position, End: p.current.Position},
 			Identifier: identifier,
 			Range:      rangeNode,
 			Body:       block,
 		}
 	case chToken.BREAK:
 		breakToken := p.consume(chToken.BREAK)
-		return &BreakStatement{Span: chToken.Span{
+		return &BreakStatement{Span: &chToken.Span{
 			Start: breakToken.Position,
 			End:   p.current.Position,
 		}}
 	case chToken.CONTINUE:
 		continueToken := p.consume(chToken.CONTINUE)
-		return &ContinueStatement{Span: chToken.Span{
+		return &ContinueStatement{Span: &chToken.Span{
 			Start: continueToken.Position,
 			End:   p.current.Position,
 		}}
@@ -124,13 +129,13 @@ func (p *Parser) parseStatement() Statement {
 		}
 		spanStart := p.current.Position
 		if p.current.Type == chToken.SEMICOLON || p.current.Type == chToken.NEW_LINE {
-			return &ReturnStatement{Span: chToken.Span{Start: spanStart, End: p.current.Position}}
+			return &ReturnStatement{Span: &chToken.Span{Start: spanStart, End: p.current.Position}}
 		}
 		expr := p.parseExpression()
 		if p.current.Type == chToken.SEMICOLON {
 			p.consume(p.current.Type)
 		}
-		return &ReturnStatement{Expression: expr, Span: chToken.Span{Start: spanStart, End: p.current.Position}}
+		return &ReturnStatement{Expression: expr, Span: &chToken.Span{Start: spanStart, End: p.current.Position}}
 	case chToken.FUNCTION:
 		return p.parseFunStatement()
 	case chToken.LEFT_BRACE:
@@ -170,7 +175,7 @@ func (p *Parser) parseIfExpression() *IfExpression {
 		Condition: condition,
 		ThenBlock: thenBlock,
 		ElseBlock: elseBlock,
-		Span: chToken.Span{
+		Span: &chToken.Span{
 			Start: startPos,
 			End:   p.current.Position,
 		},
@@ -178,24 +183,36 @@ func (p *Parser) parseIfExpression() *IfExpression {
 }
 
 func (p *Parser) parseFunStatement() *FuncDeclarationStatement {
-	funToken := p.consume(chToken.FUNCTION)
+	signature := p.parseFunSignature()
+	return p.createFunctionBySignature(signature)
+}
+
+func (p *Parser) createFunctionBySignature(signature *FunctionSignature) *FuncDeclarationStatement {
 	p.functionScopeLevel++
 	defer func() {
 		p.functionScopeLevel--
 	}()
+
+	body := p.parseBlockStatement()
+	funcDeclaration := &FuncDeclarationStatement{
+		Signature: signature,
+		Span: &chToken.Span{
+			Start: signature.Span.Start,
+			End:   p.current.Position,
+		},
+		Body: body,
+	}
+
+	return funcDeclaration
+}
+
+// Parses function signature 'fn name(arg1: type, arg2: type) -> return_type'
+func (p *Parser) parseFunSignature() *FunctionSignature {
+	funToken := p.consume(chToken.FUNCTION)
 	identifier := p.parseIdentifier()
 	p.consume(chToken.LEFT_PAREN)
 	params := p.parseFnParameters()
 	p.consume(chToken.RIGHT_PAREN)
-
-	funcDeclaration := &FuncDeclarationStatement{
-		Name:   identifier,
-		Params: params,
-		Span: chToken.Span{
-			Start: funToken.Position,
-			End:   p.current.Position,
-		},
-	}
 
 	var returnType *Identifier
 	if p.current.Type == chToken.ARROW {
@@ -204,26 +221,48 @@ func (p *Parser) parseFunStatement() *FuncDeclarationStatement {
 		returnType = p.parseIdentifier()
 	}
 
-	funcDeclaration.Body = p.parseBlockStatement()
-
-	if returnType != nil {
-		funcDeclaration.ReturnType = returnType
+	signature := &FunctionSignature{
+		Name: identifier,
+		Span: &chToken.Span{
+			Start: funToken.Position,
+			End:   p.current.Position,
+		},
+		Args: params,
 	}
 
-	return funcDeclaration
+	if returnType != nil {
+		signature.ReturnType = returnType
+	}
+
+	return signature
 }
 
 func (p *Parser) parseFnParameters() []*FuncArgument {
 	params := make([]*FuncArgument, 0)
 	for p.current.Type != chToken.RIGHT_PAREN {
+		self := false
+
+		// parse self argument if it is a method
+		if p.current.Type == chToken.AMPERSAND {
+			p.consume(chToken.AMPERSAND)
+			self = true
+		}
+
+		// parse function name
 		identifier := p.parseIdentifier()
-		p.consume(chToken.COLON) // type annotation
-		p.expect(chToken.IDENTIFIER)
-		idType := p.parseIdentifier()
+
+		// parse type annotation
+		var idType Expression
+		if p.current.Type == chToken.COLON {
+			p.consume(chToken.COLON)
+			p.expect(chToken.IDENTIFIER)
+			idType = p.parseIdentifier()
+		}
 
 		arg := &FuncArgument{
 			Name: identifier,
 			Type: idType,
+			Ref:  self,
 		}
 		params = append(params, arg)
 		if p.current.Type == chToken.COMMA {
@@ -252,7 +291,7 @@ func (p *Parser) parseConstStatement() *ConstDeclarationStatement {
 		Name:       identifier,
 		Type:       varType,
 		Value:      expression,
-		Span: chToken.Span{
+		Span: &chToken.Span{
 			Start: constToken.Position,
 			End:   p.current.Position,
 		},
@@ -265,13 +304,127 @@ func (p *Parser) parseTypeStatement() *TypeDeclarationStatement {
 	p.consume(chToken.ASSIGN)
 	spec := p.parseTypeSpec()
 	return &TypeDeclarationStatement{
-		Span: chToken.Span{
+		Span: &chToken.Span{
 			Start: typeToken.Position,
 			End:   p.current.Position,
 		},
 		Name: identifier,
 		Spec: spec,
 	}
+}
+
+func (p *Parser) parseStructStatement() *StructDeclarationStatement {
+	structToken := p.consume(chToken.STRUCT)
+	name := p.parseIdentifier()
+	stmt := &StructDeclarationStatement{
+		Name: name,
+		Span: &chToken.Span{
+			Start: structToken.Position,
+		},
+		Body: &StructType{
+			Fields: []*StructField{},
+			Span:   &chToken.Span{},
+		},
+	}
+
+	if p.current.Type == chToken.LEFT_BRACE {
+		structFieldStart := p.consume(chToken.LEFT_BRACE)
+		stmt.Body.Span.Start = structFieldStart.Position
+		for p.current.Type != chToken.RIGHT_BRACE || p.current.Type == chToken.EOF {
+			p.skipWhile(chToken.NEW_LINE)
+			id := p.parseIdentifier()
+			p.consume(chToken.COLON)
+			ty := p.parseTypeSpec()
+			field := &StructField{
+				Name:  id,
+				Value: ty,
+			}
+			stmt.Body.Fields = append(stmt.Body.Fields, field)
+			if p.current.Type == chToken.COMMA {
+				p.consume(chToken.COMMA)
+			}
+			p.skipWhile(chToken.NEW_LINE)
+		}
+		structFieldEnd := p.consume(chToken.RIGHT_BRACE)
+		stmt.Body.Span.End = structFieldEnd.Position
+	}
+
+	stmt.Span.End = p.current.Position
+	return stmt
+}
+
+func (p *Parser) parseTraitStatement() *TraitDeclarationStatement {
+	traitToken := p.consume(chToken.TRAIT)
+	trait := &TraitDeclarationStatement{
+		Name:               p.parseIdentifier(),
+		MethodSignatures:   make([]*FunctionSignature, 0),
+		MethodDeclarations: make([]*FuncDeclarationStatement, 0),
+	}
+
+	p.consume(chToken.LEFT_BRACE)
+	p.skipWhile(chToken.NEW_LINE)
+	for p.current.Type != chToken.RIGHT_BRACE {
+		sign := p.parseFunSignature()
+		if p.current.Type == chToken.LEFT_BRACE {
+			method := p.createFunctionBySignature(sign)
+			trait.MethodDeclarations = append(trait.MethodDeclarations, method)
+		} else {
+			trait.MethodSignatures = append(trait.MethodSignatures, sign)
+		}
+
+		if p.current.Type == chToken.SEMICOLON {
+			p.consume(chToken.SEMICOLON)
+		}
+		p.skipWhile(chToken.NEW_LINE)
+	}
+	p.consume(chToken.RIGHT_BRACE)
+
+	trait.Span = &chToken.Span{
+		Start: traitToken.Position,
+		End:   p.current.Position,
+	}
+	return trait
+}
+
+func (p *Parser) parseImplStatement() *ImplStatement {
+	implToken := p.consume(chToken.IMPL)
+	impl := &ImplStatement{
+		Receiver: p.parseIdentifier(),
+	}
+
+	if p.current.Type == chToken.BY {
+		p.consume(chToken.BY)
+		for p.current.Type != chToken.LEFT_BRACE {
+			id := p.parseIdentifier()
+			impl.Traits = append(impl.Traits, id)
+			ok := p.expectOneOf(chToken.COMMA, chToken.IDENTIFIER, chToken.LEFT_BRACE)
+			if !ok {
+				break
+			}
+			if p.current.Type == chToken.COMMA {
+				p.consume(chToken.COMMA)
+			}
+		}
+	}
+
+	p.consume(chToken.LEFT_BRACE)
+	for p.current.Type != chToken.RIGHT_BRACE {
+		p.skipWhile(chToken.NEW_LINE)
+		method := p.parseFunStatement()
+		impl.Methods = append(impl.Methods, method)
+
+		if p.current.Type == chToken.SEMICOLON {
+			p.consume(chToken.SEMICOLON)
+		}
+		p.skipWhile(chToken.NEW_LINE)
+	}
+	p.consume(chToken.RIGHT_BRACE)
+
+	impl.Span = &chToken.Span{
+		Start: implToken.Position,
+		End:   p.current.Position,
+	}
+	return impl
 }
 
 func (p *Parser) parseVarStatement() *VarDeclarationStatement {
@@ -295,7 +448,7 @@ func (p *Parser) parseVarStatement() *VarDeclarationStatement {
 		Name:     identifier,
 		Type:     varType,
 		Value:    expression,
-		Span: chToken.Span{
+		Span: &chToken.Span{
 			Start: letToken.Position,
 			End:   p.current.Position,
 		},
@@ -326,14 +479,13 @@ func (p *Parser) parseBlockStatement() *BlockStatement {
 func (p *Parser) parseIdentifier() *Identifier {
 	start := p.current.Position
 	token := p.consume(chToken.IDENTIFIER)
-	return &Identifier{Token: token, Value: token.Literal, Span: chToken.Span{
+	return &Identifier{Token: token, Value: token.Literal, Span: &chToken.Span{
 		Start: start,
 		End:   p.current.Position,
 	}}
 }
 
-func (p *Parser) parseCallExpression() *CallExpression {
-	identifier := p.parseIdentifier()
+func (p *Parser) parseCallExpression(left Expression) *CallExpression {
 	p.consume(chToken.LEFT_PAREN)
 	args := make([]Expression, 0)
 	for p.current.Type != chToken.RIGHT_PAREN {
@@ -346,10 +498,10 @@ func (p *Parser) parseCallExpression() *CallExpression {
 	}
 	p.consume(chToken.RIGHT_PAREN)
 	return &CallExpression{
-		Function: identifier,
+		Function: left,
 		Args:     args,
-		Span: chToken.Span{
-			Start: identifier.Span.Start,
+		Span: &chToken.Span{
+			Start: left.GetSpan().Start,
 			End:   p.current.Position,
 		},
 	}
@@ -362,28 +514,17 @@ func (p *Parser) parseExpression() Expression {
 // Pratt parser for binary expressions
 func (p *Parser) parseBinaryExpression(min int) Expression {
 	spanStart := p.current.Position
-	left := p.parsePrimary()
+	left := p.processPrimary(p.parsePrimary())
 
-	// parse index expression if there is a left bracket after the primary expression
-	if p.current.Type == chToken.LEFT_BRACKET {
-		p.consume(chToken.LEFT_BRACKET)
-		index := p.parseExpression()
-		p.consume(chToken.RIGHT_BRACKET)
-		left = &IndexExpression{
-			Span: chToken.Span{
-				Start: spanStart,
-				End:   p.current.Position,
-			},
-			Left:  left,
-			Index: index,
-		}
+	if left == nil {
+		return nil
 	}
 
 	// parse assignment expression
 	if chToken.IsAssignment(p.current.Type) {
 		op := p.consume(p.current.Type)
 		right := p.parseBinaryExpression(min)
-		return &AssignExpression{Left: left, Operator: op, Right: right, Span: chToken.Span{
+		return &AssignExpression{Left: left, Operator: op, Right: right, Span: &chToken.Span{
 			Start: spanStart,
 			End:   p.current.Position,
 		}}
@@ -397,12 +538,47 @@ func (p *Parser) parseBinaryExpression(min int) Expression {
 			precedence -= 1
 		}
 		right := p.parseBinaryExpression(precedence)
-		left = &BinaryExpression{Left: left, Operator: op, Right: right, Span: chToken.Span{
+		left = &BinaryExpression{Left: left, Operator: op, Right: right, Span: &chToken.Span{
 			Start: spanStart,
 			End:   p.current.Position,
 		}}
 	}
 	return left
+}
+
+func (p *Parser) processPrimary(primary Expression) Expression {
+	if primary == nil {
+		return nil
+	}
+	spanStart := primary.GetSpan().Start
+	switch p.current.Type {
+	case chToken.DOT:
+		for p.current.Type == chToken.DOT {
+			p.consume(chToken.DOT)
+			primary = &MemberExpression{
+				Span:   &chToken.Span{Start: spanStart, End: p.current.Position},
+				Left:   primary,
+				Member: p.parseIdentifier(),
+			}
+		}
+		return p.processPrimary(primary)
+	case chToken.LEFT_PAREN:
+		return p.processPrimary(p.parseCallExpression(primary))
+	case chToken.LEFT_BRACKET:
+		p.consume(chToken.LEFT_BRACKET)
+		index := p.parseExpression()
+		p.consume(chToken.RIGHT_BRACKET)
+		return p.processPrimary(&IndexExpression{
+			Span: &chToken.Span{
+				Start: spanStart,
+				End:   p.current.Position,
+			},
+			Left:  primary,
+			Index: index,
+		})
+	}
+
+	return primary
 }
 
 func (p *Parser) parsePrimary() Expression {
@@ -411,7 +587,7 @@ func (p *Parser) parsePrimary() Expression {
 	switch p.current.Type {
 	case chToken.TRUE, chToken.FALSE:
 		token := p.consume(p.current.Type)
-		return &BoolLiteral{Value: token.Literal, Span: chToken.Span{
+		return &BoolLiteral{Value: token.Literal, Span: &chToken.Span{
 			Start: startExprPos,
 			End:   p.current.Position,
 		}}
@@ -443,7 +619,7 @@ func (p *Parser) parsePrimary() Expression {
 			Value:  literal,
 			Base:   intBase,
 			Suffix: suffix,
-			Span: chToken.Span{
+			Span: &chToken.Span{
 				Start: startExprPos,
 				End:   p.current.Position,
 			}}
@@ -468,28 +644,47 @@ func (p *Parser) parsePrimary() Expression {
 		return &FloatLiteral{
 			Value:  literal,
 			Suffix: suffix,
-			Span: chToken.Span{
+			Span: &chToken.Span{
 				Start: startExprPos,
 				End:   p.current.Position,
 			}}
 	case chToken.STRING_LITERAL:
 		token := p.consume(chToken.STRING_LITERAL)
-		return &StringLiteral{Value: token.Literal, Span: chToken.Span{
+		return &StringLiteral{Value: token.Literal, Span: &chToken.Span{
 			Start: startExprPos,
 			End:   p.current.Position,
 		}}
 	case chToken.IDENTIFIER:
-		if p.peek().Type == chToken.LEFT_PAREN {
-			return p.parseCallExpression()
+		ident := p.parseIdentifier()
+		if p.current.Type == chToken.LEFT_BRACE { // struct initialization
+			p.consume(chToken.LEFT_BRACE)
+			fields := make([]*StructField, 0)
+			for p.current.Type != chToken.RIGHT_BRACE {
+				p.skipWhile(chToken.NEW_LINE)
+				id := p.parseIdentifier()
+				p.consume(chToken.COLON)
+				expr := p.parseExpression()
+				fields = append(fields, &StructField{Name: id, Value: expr})
+				if p.current.Type == chToken.COMMA {
+					p.consume(chToken.COMMA)
+				}
+				p.skipWhile(chToken.NEW_LINE)
+			}
+			p.consume(chToken.RIGHT_BRACE)
+			return &InitStructExpression{
+				Name:   ident,
+				Span:   &chToken.Span{Start: ident.Span.Start, End: p.current.Position},
+				Fields: fields,
+			}
 		}
-		return p.parseIdentifier()
+		return ident
 	case chToken.LEFT_PAREN:
 		p.consume(chToken.LEFT_PAREN)
 		expression := p.parseExpression()
 		p.consume(chToken.RIGHT_PAREN)
 		return expression
 	case chToken.LEFT_BRACKET:
-		expr := &ArrayExpression{Span: chToken.Span{Start: startExprPos}}
+		expr := &ArrayExpression{Span: &chToken.Span{Start: startExprPos}}
 		p.consume(chToken.LEFT_BRACKET)
 
 		p.skipWhile(chToken.NEW_LINE)
@@ -511,8 +706,8 @@ func (p *Parser) parsePrimary() Expression {
 		return expr
 	case chToken.PLUS, chToken.MINUS, chToken.BANG:
 		op := p.consume(p.current.Type)
-		expression := p.parsePrimary()
-		return &UnaryExpression{Operator: op, Right: expression, Span: chToken.Span{
+		expression := p.parseExpression()
+		return &UnaryExpression{Operator: op, Right: expression, Span: &chToken.Span{
 			Start: startExprPos,
 			End:   p.current.Position,
 		}}
@@ -533,7 +728,7 @@ func (p *Parser) parseTypeSpec() Expression {
 	primary := p.parseTypePrimary()
 
 	for p.current.Type == chToken.LEFT_BRACKET {
-		arrayType := &ArrayType{Type: primary, Span: chToken.Span{Start: start}}
+		arrayType := &ArrayType{Type: primary, Span: &chToken.Span{Start: start}}
 		p.consume(chToken.LEFT_BRACKET)
 		if p.current.Type == chToken.INT_LITERAL {
 			arrayType.Size = p.parseExpression()
@@ -576,7 +771,7 @@ func (p *Parser) parseTypePrimary() Expression {
 			p.consume(chToken.ARROW)
 			returnType := p.parseTypeSpec()
 			return &FunctionType{
-				Span:       chToken.Span{Start: startDelimiter.Position, End: p.current.Position},
+				Span:       &chToken.Span{Start: startDelimiter.Position, End: p.current.Position},
 				Args:       args,
 				ReturnType: returnType,
 			}
