@@ -1,4 +1,4 @@
-package symbols
+package env
 
 import "fmt"
 
@@ -8,6 +8,48 @@ type ChlangType interface {
 	String() string
 }
 
+type ChlangTraitType struct {
+	Name         string
+	Signatures   []*ChlangFunctionType
+	Declarations []*EnvSymbolEntity
+}
+
+func (ChlangTraitType) Type() {}
+func (c ChlangTraitType) String() string {
+	return "trait " + c.Name
+}
+
+type ChlangStructField struct {
+	Name string
+	Type ChlangType
+}
+
+// Struct type, e.g. struct { a: i32, b: i32 }
+type ChlangStructType struct {
+	Name    string
+	Fields  []*ChlangStructField
+	Methods map[string]*EnvSymbolEntity
+}
+
+func (s *ChlangStructType) LookupField(name string) *ChlangStructField {
+	for _, field := range s.Fields {
+		if field.Name == name {
+			return field
+		}
+	}
+	return nil
+}
+
+func (s *ChlangStructType) LookupMethod(name string) *EnvSymbolEntity {
+	return s.Methods[name]
+}
+
+func (ChlangStructType) Type() {}
+func (c ChlangStructType) String() string {
+	return "struct " + c.Name
+}
+
+// Array type, e.g. i32[10], i32[]
 type ChlangArrayType struct {
 	ElementType ChlangType
 	Length      int
@@ -22,6 +64,9 @@ func (c ChlangArrayType) String() string {
 	return element + "[]"
 }
 
+// Represents a function type in the language
+// Example: (i32, i32) -> i32
+// Example 1: (MyOwnType, i32) -> (i32, MyOwnType)
 type ChlangFunctionType struct {
 	SpreadType ChlangType // nil if not spread
 	Return     ChlangType

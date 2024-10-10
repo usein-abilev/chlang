@@ -42,7 +42,7 @@ func (e SyntaxError) Error() string {
 type SemanticError struct {
 	Message  string
 	HelpMsg  string
-	Span     token.Span
+	Span     *token.Span
 	Position token.TokenPosition
 }
 
